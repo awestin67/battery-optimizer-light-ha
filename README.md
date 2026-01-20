@@ -6,23 +6,12 @@ Här är en instruktion du kan ge till dina användare för att installera och a
 
 Denna integration kopplar din Home Assistant till optimeringsmotorn. Den skickar din batterinivå (SoC) till molnet var 5:e minut och får tillbaka ett optimalt beslut (Ladda, Ladda ur eller Vila) baserat på elpriser och solprognos.
 
-## Steg 1: Installation (Custom Component)
-
-Eftersom integrationen inte finns i HACS än, måste den installeras manuellt:
-
-1. Använd en filhanterare (t.ex. **File Editor** eller **Samba Share**) i Home Assistant.
-2. Gå till mappen `/config/custom_components/`.
-3. Skapa en ny mapp som heter: `battery_optimizer_light`
-4. Ladda upp följande filer till den mappen:
-* `__init__.py`
-* `manifest.json`
-* `sensor.py`
-* `config_flow.py`
-* `const.py`
-* `coordinator.py`
-
-
-5. **Starta om Home Assistant** (Inställningar -> System -> Starta om).
+## Steg 1: Installera via HACS (Rekommenderas)
+  1. Gå till **HACS** -> **Integrationer** -> **Anpassade arkiv** (Custom repositories).
+  2. Lägg till denna URL: `https://github.com/awestin67/battery-optimizer-light-ha`
+  3. Välj kategori **Integration** och klicka Lägg till.
+  4. Installera "Battery Optimizer Light" och starta om Home Assistant.
+  5. **Starta om Home Assistant** (Inställningar -> System -> Starta om).
 
 ## Steg 2: Konfiguration
 
