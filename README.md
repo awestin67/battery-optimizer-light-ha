@@ -62,67 +62,59 @@ Här är ett exempel på hur en automation kan se ut. **OBS:** Tjänsterna (`ser
 **Exempel på logik (YAML):**
 
 ```yaml
-alias: "Styr Batteri via Optimizer"
-description: "Ändrar batteriets läge baserat på Battery Optimizer Light"
-trigger:
-  - platform: state
+alias: Battery Optimizer Light - Utför Beslut (Sonnen API)
+description: Styr Sonnen-batteriet via REST commands baserat på optimeraren.
+triggers:
+  - trigger: state
     entity_id: sensor.optimizer_light_action
-action:
+  - trigger: numeric_state
+    entity_id: sensor.solaredge_se15k_solar_power
+    above: 2000
+  - trigger: time_pattern
+    minutes: /5
+conditions:
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: sensor.optimizer_light_action
+        state:
+          - unknown
+          - unavailable
+actions:
+  - variables:
+      current_action: "{{ states('sensor.optimizer_light_action') }}"
+      target_power: "{{ (states('sensor.optimizer_light_power') | float(0) * 1000) | int }}"
+      current_solar: "{{ states('sensor.solar_production') | float(0) }}"
   - choose:
-      # --- FALL 1: LADDA (KÖP BILLIGT) ---
       - conditions:
-          - condition: state
-            entity_id: sensor.optimizer_light_action
-            state: "CHARGE"
+          - condition: template
+            value_template: "{{ current_solar > 2000 }}"
         sequence:
-          # Exempel: Ställ in batteriet på att ladda från nätet
-          - service: select.select_option
-            target:
-              entity_id: select.mitt_batteri_mode
-            data:
-              option: "Force Charge"
-          # Ställ in effekten (Hämta värdet från power-sensorn)
-          - service: number.set_value
-            target:
-              entity_id: number.mitt_batteri_ladd_effekt
-            data:
-              value: "{{ states('sensor.optimizer_light_power') }}"
-
-      # --- FALL 2: LADDA UR (SÄLJ DYRT) ---
+          - action: script.sonnen_set_auto_mode
       - conditions:
-          - condition: state
-            entity_id: sensor.optimizer_light_action
-            state: "DISCHARGE"
+          - condition: template
+            value_template: "{{ current_action == 'CHARGE' }}"
         sequence:
-          # Exempel: Ställ in batteriet på att ladda ur max
-          - service: select.select_option
-            target:
-              entity_id: select.mitt_batteri_mode
-            data:
-              option: "Force Discharge" # Eller "Self Consumption" beroende på märke
-          - service: number.set_value
-            target:
-              entity_id: number.mitt_batteri_urladd_effekt
-            data:
-              value: "{{ states('sensor.optimizer_light_power') }}"
-
-      # --- FALL 3: VILA (IDLE/HOLD) ---
+          - data:
+              power: "{{ target_power }}"
+            action: script.sonnen_force_charge
       - conditions:
-          - condition: or
-            conditions:
-              - condition: state
-                entity_id: sensor.optimizer_light_action
-                state: "IDLE"
-              - condition: state
-                entity_id: sensor.optimizer_light_action
-                state: "HOLD"
+          - condition: template
+            value_template: "{{ current_action == 'DISCHARGE' }}"
         sequence:
-          # Stoppa batteriet eller sätt i "Self Consumption" utan nätladdning
-          - service: select.select_option
-            target:
-              entity_id: select.mitt_batteri_mode
-            data:
-              option: "Stop" # Eller "Self Consumption"
+          - data:
+              power: "{{ target_power }}"
+            action: script.sonnen_force_discharge
+      - conditions:
+          - condition: template
+            value_template: "{{ current_action == 'HOLD' }}"
+        sequence:
+          - data:
+              power: 0
+            action: script.sonnen_force_charge
+    default:
+      - action: script.sonnen_set_auto_mode
+mode: single
 
 ```
 
