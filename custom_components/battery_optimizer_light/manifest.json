@@ -1,10 +1,14 @@
 {
   "domain": "battery_optimizer_light",
   "name": "Battery Optimizer Light",
-  "codeowners": ["@awestin67"],
+  "codeowners": [
+    "@awestin67"
+  ],
   "config_flow": true,
-  "documentation": "https://github.com/awestin67/battery-optimizer-light",
+  "documentation": "https://github.com/awestin67/battery-optimizer-light-ha",
   "iot_class": "cloud_polling",
-  "version": "0.1.0",
-  "requirements": ["aiohttp"]
+  "version": "0.1.1",
+  "requirements": [
+    "aiohttp"
+  ]
 }

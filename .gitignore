@@ -1,0 +1,21 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtuell Miljö (Viktigast!) ---
+.venv/
+venv/
+env/
+
+# --- VS Code / Code Server ---
+.vscode/
+*.code-workspace
+
+# --- OS-skräp ---
+.DS_Store
+Thumbs.db
+
+# --- Loggar och Databaser (om du kör HA lokalt) ---
+*.log
+*.db
