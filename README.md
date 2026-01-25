@@ -1,28 +1,34 @@
 # 🔋 Battery Optimizer Light (Home Assistant Integration)
 
-**Battery Optimizer Light** kopplar din Home Assistant till en smart molntjänst som optimerar ditt Sonnen-batteri.
+**Battery Optimizer Light** är en hybrid-lösning som kopplar din Home Assistant till en smart molntjänst för Sonnen-batterier.
 
-Den skickar batterinivå (SoC) till molnet var 5:e minut och får tillbaka ett optimalt beslut baserat på **Elpriser (Arbitrage)**, **Solprognos** och **Effekttoppar (Peak Shaving)**.
+Den kombinerar **Moln-intelligens** (för prisoptimering och statistik) med **Lokal styrka** (för blixtsnabb effektvakt via Automationer).
 
 ---
 
 ## ✨ Funktioner
 
-* **📈 Prisoptimering:** Laddar billigt, säljer dyrt.
-* **🛡️ Effektvakt (Peak Shaving):** Övervakar husets förbrukning i realtid. Om du går över din inställda gräns (t.ex. 10 kW) tvingas batteriet att ladda ur för att kapa toppen.
-* **⛄ Vinterbuffert:** Sparar en valfri % av batteriet som *aldrig* säljs, utan sparas för nödlägen/effekttoppar.
-* **☀️ Smart Solstyrning:** Växlar automatiskt till eget bruk (Auto) när solen skiner.
+* **📈 Prisoptimering (Arbitrage):** Laddar billigt, säljer dyrt baserat på spotpris och prognos.
+* **🛡️ Effektvakt (Peak Shaving):** Övervakar husets förbrukning i realtid via dina lokala sensorer. Kapar toppar direkt via automationer och rapporterar statistiken till molnet.
+* **⛄ Vinterbuffert:** Sparar en valfri % av batteriet som *aldrig* säljs, utan sparas för nödlägen.
+* **📊 Statistik:** Se "Top 3" effekttoppar och besparingshistorik i en snygg Web Dashboard.
 
 ---
 
 ## 🛠️ Förberedelser (Krav)
 
-För att automationerna ska fungera måste du ha följande **Script** i Home Assistant som styr ditt Sonnen-batteri:
-
+### 1. Skript
+För att systemet ska kunna styra ditt batteri måste du ha dessa skript i Home Assistant:
 * `script.sonnen_set_manual_mode`
 * `script.sonnen_set_auto_mode`
 * `script.sonnen_force_charge` (Måste acceptera `power` som variabel)
 * `script.sonnen_force_discharge` (Måste acceptera `power` som variabel)
+
+### 2. Sensorer
+Du behöver veta namnet på följande sensorer i din Home Assistant:
+* **Batteri SoC:** (t.ex. `sensor.sonnen_usoc`)
+* **Nätsensor (Grid):** Mäter husets totala in/utmatning i Watt (t.ex. `sensor.beraknad_nateffekt` eller `sensor.power_meter_active_power`).
+* **Batterieffekt:** Mäter vad batteriet gör just nu i Watt (t.ex. `sensor.sonnen_battery_power`).
 
 ---
 
@@ -46,32 +52,22 @@ För att automationerna ska fungera måste du ha följande **Script** i Home Ass
 1. Gå till **Inställningar** -> **Enheter & Tjänster**.
 2. Klicka **+ Lägg till integration** -> Sök efter **Battery Optimizer Light**.
 3. Fyll i uppgifterna:
-    * **API URL:** (Låt stå kvar om du inte har en egen server).
+    * **API URL:** (Låt stå kvar standardvärdet).
     * **API Key:** Din nyckel från Web Dashboarden.
-    * **SoC Sensor:** Sensorn som visar batteriets % (t.ex. `sensor.sonnen_usoc`).
-
----
-
-## 📊 Sensorer
-
-Integrationen skapar följande sensorer som styrs från Dashboarden/Molnet:
-
-| Sensor | Exempelvärde | Beskrivning |
-| :--- | :--- | :--- |
-| `sensor.optimizer_light_action` | `CHARGE` / `IDLE` | Vad batteriet bör göra just nu. |
-| `sensor.optimizer_light_power` | `3.3` (kW) | Vilken effekt som ska användas. |
-| `sensor.optimizer_light_reason` | `Optimering: Köpläge` | Varför beslutet togs. |
-| `sensor.optimizer_light_buffer_target` | `20` (%) | Din inställda vinterbuffert. |
-| `sensor.optimizer_light_peak_limit` | `5.0` (kW) | Din inställda gräns för effektvakten. |
+    * **SoC Sensor:** Välj din batterisensor (%).
+    * **Grid Sensor:** Välj sensorn som mäter husets huvudsäkring/nät (W).
+    * **Battery Power Sensor:** Välj sensorn som mäter batteriets effekt (W).
 
 ---
 
 ## 🤖 Automationer (YAML)
 
-Kopiera dessa fyra automationer till din `automations.yaml`. De hanterar all logik för styrning, effektvakt och säkerhet.
+Kopiera dessa automationer till din `automations.yaml`. 
+
+*Dessa automationer ger dig full kontroll lokalt, samtidigt som de rapporterar statistik till molnet.*
 
 ### 1. Huvudstyrenhet (Utför Beslut)
-*Styr batteriet baserat på molnets beslut. Vid IDLE parkeras batteriet (0W) för att skydda bufferten.*
+*Lyssnar på molnet var 5:e minut och styr batteriet. Om molnet säger "IDLE" parkeras batteriet (0W).*
 
 ```yaml
 alias: Battery Optimizer Light - Utför Beslut
@@ -80,7 +76,7 @@ triggers:
   - trigger: state
     entity_id: sensor.optimizer_light_action
   - trigger: numeric_state
-    entity_id: sensor.solar_power
+    entity_id: sensor.solar_power # <--- ÄNDRA TILL DIN SOLSENSOR
     above: 2000
   - trigger: time_pattern
     minutes: /5
@@ -94,7 +90,7 @@ actions:
   - variables:
       current_action: "{{ states('sensor.optimizer_light_action') }}"
       target_power: "{{ (states('sensor.optimizer_light_power') | float(0) * 1000) | int }}"
-      current_solar: "{{ states('sensor.solar_power') | float(0) }}"
+      current_solar: "{{ states('sensor.solar_power') | float(0) }}" # <--- SAMMA HÄR
   - choose:
       # Prio 1: Mycket Sol -> Auto Mode
       - conditions: "{{ current_solar > 2000 }}"

@@ -1,0 +1,4 @@
+report_peak:
+  name: Rapportera Effekttopp
+  description: Läser av din konfigurerade nätsensor och skickar en rapport till molnet om att effektvakten har aktiverats.
+  fields: {}
