@@ -18,9 +18,8 @@ Den kombinerar **Moln-intelligens** (för prisoptimering och statistik) med **Lo
 ## 🛠️ Förberedelser (Krav)
 
 ### 1. Skript
-För att systemet ska kunna styra ditt batteri måste du ha dessa skript i Home Assistant:
-* `script.sonnen_set_manual_mode`
-* `script.sonnen_set_auto_mode`
+För att systemet ska kunna styra ditt batteri (t.ex. ett Sonnen) måste du ha dessa skript i Home Assistant:
+* `script.sonnen_set_auto_mode` (Motsvarar self-consumption)
 * `script.sonnen_force_charge` (Måste acceptera `power` som variabel)
 * `script.sonnen_force_discharge` (Måste acceptera `power` som variabel)
 
@@ -29,6 +28,20 @@ Du behöver veta namnet på följande sensorer i din Home Assistant:
 * **Batteri SoC:** (t.ex. `sensor.sonnen_usoc`)
 * **Nätsensor (Grid):** Mäter husets totala in/utmatning i Watt (t.ex. `sensor.beraknad_nateffekt` eller `sensor.power_meter_active_power`).
 * **Batterieffekt:** Mäter vad batteriet gör just nu i Watt (t.ex. `sensor.sonnen_battery_power`).
+
+```yaml
+template:
+  - sensor:
+      - name: "Beräknad Näteffekt"
+        unique_id: calculated_grid_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {% set cons = states('sensor.sonnen_consumption_w') | float(0) %}
+          {% set prod = states('sensor.sonnen_production_w') | float(0) %}
+          {% set batt = states('sensor.sonnen_battery_power_w') | float(0) %}
+          {{ (cons - prod - batt) | int }}
 
 ---
 
@@ -70,14 +83,11 @@ Kopiera dessa automationer till din `automations.yaml`.
 *Lyssnar på molnet var 5:e minut och styr batteriet. Om molnet säger "IDLE" parkeras batteriet (0W).*
 
 ```yaml
-alias: Battery Optimizer Light - Utför Beslut
-mode: single
+alias: 🔋 Battery Optimizer Light - Utför Beslut (Sonnen API)
+description: Styr Sonnen-batteriet via REST commands baserat på optimeraren.
 triggers:
   - trigger: state
     entity_id: sensor.optimizer_light_action
-  - trigger: numeric_state
-    entity_id: sensor.solar_power # <--- ÄNDRA TILL DIN SOLSENSOR
-    above: 2000
   - trigger: time_pattern
     minutes: /5
 conditions:
@@ -85,31 +95,40 @@ conditions:
     conditions:
       - condition: state
         entity_id: sensor.optimizer_light_action
-        state: ["unknown", "unavailable"]
+        state:
+          - unknown
+          - unavailable
 actions:
   - variables:
       current_action: "{{ states('sensor.optimizer_light_action') }}"
       target_power: "{{ (states('sensor.optimizer_light_power') | float(0) * 1000) | int }}"
-      current_solar: "{{ states('sensor.solar_power') | float(0) }}" # <--- SAMMA HÄR
   - choose:
-      # Prio 1: Mycket Sol -> Auto Mode
-      - conditions: "{{ current_solar > 2000 }}"
+      - conditions:
+          - condition: template
+            value_template: "{{ current_action == 'CHARGE' }}"
+        sequence:
+          - data:
+              power: "{{ target_power }}"
+            action: script.sonnen_force_charge
+      - conditions:
+          - condition: template
+            value_template: "{{ current_action == 'DISCHARGE' }}"
+        sequence:
+          - data:
+              power: "{{ target_power }}"
+            action: script.sonnen_force_discharge
+      - conditions:
+          - condition: template
+            value_template: "{{ current_action == 'HOLD' }}"
+        sequence:
+          - data:
+              power: 0
+            action: script.sonnen_force_charge
+      - conditions:
+          - condition: template
+            value_template: "{{ current_action == 'IDLE' }}"
         sequence:
           - action: script.sonnen_set_auto_mode
-      # Prio 2: Ladda
-      - conditions: "{{ current_action == 'CHARGE' }}"
-        sequence:
-          - action: script.sonnen_force_charge
-            data: { power: "{{ target_power }}" }
-      # Prio 3: Sälj
-      - conditions: "{{ current_action == 'DISCHARGE' }}"
-        sequence:
-          - action: script.sonnen_force_discharge
-            data: { power: "{{ target_power }}" }
-      # Prio 4: Vänta -> Parkera batteriet (Manual 0W)
-      - conditions: "{{ current_action == 'IDLE' or current_action == 'HOLD' }}"
-        sequence:
-          - action: script.sonnen_force_charge
-            data: { power: 0 }
     default:
       - action: script.sonnen_set_auto_mode
+mode: single
