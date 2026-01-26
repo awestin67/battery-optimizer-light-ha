@@ -42,7 +42,7 @@ template:
           {% set prod = states('sensor.sonnen_production_w') | float(0) %}
           {% set batt = states('sensor.sonnen_battery_power_w') | float(0) %}
           {{ (cons - prod - batt) | int }}
-
+```
 ---
 
 ## 🚀 Installation
@@ -132,3 +132,4 @@ actions:
     default:
       - action: script.sonnen_set_auto_mode
 mode: single
+```
