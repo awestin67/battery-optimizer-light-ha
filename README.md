@@ -26,22 +26,20 @@ För att systemet ska kunna styra ditt batteri (t.ex. ett Sonnen) måste du ha d
 ### 2. Sensorer
 Du behöver veta namnet på följande sensorer i din Home Assistant:
 * **Batteri SoC:** (t.ex. `sensor.sonnen_usoc`)
-* **Nätsensor (Grid):** Mäter husets totala in/utmatning i Watt (t.ex. `sensor.beraknad_nateffekt` eller `sensor.power_meter_active_power`).
-* **Batterieffekt:** Mäter vad batteriet gör just nu i Watt (t.ex. `sensor.sonnen_battery_power`).
+* **Virtuell Nätsensor:** Mäter husets totala in/utmatning i Watt exklusive batteriet.
 
 ```yaml
 template:
   - sensor:
-      - name: "Beräknad Näteffekt"
-        unique_id: calculated_grid_power
+      - name: "Husets Netto Last Virtuell"
+        unique_id: house_net_load_virtual
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
         state: >
           {% set cons = states('sensor.sonnen_consumption_w') | float(0) %}
-          {% set prod = states('sensor.sonnen_production_w') | float(0) %}
-          {% set batt = states('sensor.sonnen_battery_power_w') | float(0) %}
-          {{ (cons - prod - batt) | int }}
+          {% set prod = states('sensor.sonnen_production_w') | float(0) %}          
+          {{ (cons - prod) | int }}
 ```
 ---
 
@@ -132,4 +130,37 @@ actions:
     default:
       - action: script.sonnen_set_auto_mode
 mode: single
+```
+### 2. Effektvakt (Peak Shaving)
+Undviker effektspikar i realtid. Använder den virtuella lasten för stabilitet och återgår till viloläge (HOLD) direkt när toppen är kapad.
+```yaml
+alias: ✅ Effektvakt - Kapa toppar (Stabil)
+mode: restart
+triggers:
+  - trigger: state
+    entity_id: sensor.husets_netto_last_virtuell
+  - trigger: time_pattern
+    seconds: /30
+variables:
+  current_load: "{{ states('sensor.husets_netto_last_virtuell') | float(0) }}"
+  limit_w: "{{ states('sensor.optimizer_light_peak_limit') | float(10) * 1000 }}"
+  soc: "{{ states('sensor.sonnen_usoc') | float(0) }}"
+actions:
+  - choose:
+      - conditions:
+          - "{{ current_load > limit_w }}"
+          - "{{ soc > 5 }}"
+        sequence:
+          - action: script.sonnen_force_discharge
+            data:
+              power: >
+                {% set max_inverter = 3300 %}
+                {% set need = current_load - limit_w %}
+                {# Skicka behovet, men aldrig mer än växelriktaren klarar #}
+                {{ [need, max_inverter] | min | int }}
+      - conditions:
+          - "{{ current_load <= limit_w }}"
+        sequence:
+          - action: script.sonnen_force_charge
+            data: { power: 0 }
 ```
