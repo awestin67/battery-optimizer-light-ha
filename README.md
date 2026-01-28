@@ -29,7 +29,7 @@ För att systemet ska kunna styra ditt batteri (t.ex. ett Sonnen) måste du ha d
 Du behöver veta namnet på följande sensorer i din Home Assistant:
 * **Batteri SoC:** (t.ex. `sensor.sonnen_usoc`)
 * **Virtuell Nätsensor:** Mäter husets totala in/utmatning i Watt exklusive batteriet.
-
+Effektvakten är hårdkodad att lyssna på en sensor med ID:t sensor.husets_netto_last_virtuell. Lägg till detta i configuration.yaml (eller template.yaml):
 ```yaml
 template:
   - sensor:
@@ -136,26 +136,4 @@ actions:
     default:
       - action: script.sonnen_set_auto_mode
 mode: single
-```
-### 2. Effektvakt (Peak Shaving)
-Denna automation väcker bara integrationen när lasten ändras. All logik (Hysteres, Rapportering, Styrning) sker nu automatiskt i Python-koden.
-```yaml
-alias: ✅ Effektvakt - Trigger
-description: >-
-  Trigger för batterioptimeringens effektvakt. All logik hanteras av
-  integrationen (PeakGuard).
-mode: restart
-triggers:
-  - trigger: state
-    entity_id: sensor.husets_netto_last_virtuell
-  - trigger: time_pattern
-    seconds: /30
-actions:
-  # Anropar integrationens smarta tjänst
-  - action: battery_optimizer_light.run_peak_guard
-    data:
-      # Peka ut din virtuella sensor
-      virtual_load_entity: sensor.husets_netto_last_virtuell
-      # Peka ut gränsvärdet (Sensor från molnet ELLER Input Number)
-      limit_entity: sensor.optimizer_light_peak_limit
 ```
