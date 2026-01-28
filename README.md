@@ -9,7 +9,7 @@ Den kombinerar **Moln-intelligens** (för prisoptimering och statistik) med **Lo
 ## ✨ Funktioner
 
 * **📈 Prisoptimering (Arbitrage):** Laddar billigt, säljer dyrt baserat på spotpris och prognos.
-* **🛡️ Smart Effektvakt (Peak Shaving):** * Övervakar husets nettolast i realtid.
+* **🛡️ Smart Effektvakt (Peak Shaving):** Övervakar husets nettolast i realtid.
     * **Hysteres:** Startar urladdning direkt vid topp, men slutar först när lasten sjunkit rejält (1000W) under gränsen för att undvika "fladder".
     * **Rapportering:** Skickar statistik till molnet (max 1 gång per topp).
 * **⛄ Vinterbuffert:** Sparar en valfri % av batteriet som *aldrig* säljs, utan sparas för nödlägen.
@@ -28,6 +28,7 @@ För att systemet ska kunna styra ditt batteri (t.ex. ett Sonnen) måste du ha d
 ### 2. Sensorer
 Du behöver veta namnet på följande sensorer i din Home Assistant:
 * **Batteri SoC:** (t.ex. `sensor.sonnen_usoc`)
+* **Batteri Effekt:** (t.ex. `sensor.sonnen_battery_power_w`) – Används i automationen.
 * **Virtuell Nätsensor:** Mäter husets totala in/utmatning i Watt exklusive batteriet.
 Effektvakten är hårdkodad att lyssna på en sensor med ID:t sensor.husets_netto_last_virtuell. Lägg till detta i configuration.yaml (eller template.yaml):
 ```yaml
@@ -75,7 +76,7 @@ template:
 
 ## 🤖 Automationer (YAML)
 
-Kopiera dessa automationer till din `automations.yaml`. 
+Kopiera dessa automationer till din `automations.yaml`. **OBS:** Kontrollera att entity_id för dina sensorer (t.ex. `sensor.sonnen_battery_power_w`) stämmer överens med din installation.
 
 *Dessa automationer ger dig full kontroll lokalt, samtidigt som de rapporterar statistik till molnet.*
 

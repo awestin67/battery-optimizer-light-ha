@@ -5,7 +5,8 @@ import os
 
 # --- INSTÄLLNINGAR ---
 # Korrekt sökväg baserat på ditt domännamn
-MANIFEST_PATH = "custom_components/battery_optimizer_light/manifest.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MANIFEST_PATH = os.path.join(BASE_DIR, "custom_components", "battery_optimizer_light", "manifest.json")
 
 def run_command(command):
     """Hjälpfunktion för att köra terminalkommandon"""
@@ -69,8 +70,38 @@ def check_for_updates():
     except subprocess.CalledProcessError:
         print("⚠️  Kunde inte nå GitHub. Fortsätter ändå...")
 
+def check_branch():
+    """Varnar om man inte står på main-branchen"""
+    try:
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], 
+            shell=False
+        ).decode().strip()
+        if branch != "main":
+            print(f"⚠️  Du står på branch '{branch}'. Rekommenderat är 'main'.")
+            confirm = input("Vill du fortsätta ändå? (j/n): ")
+            if confirm.lower() != 'j':
+                sys.exit(1)
+    except subprocess.CalledProcessError:
+        pass
+
+def run_tests():
+    print("\n--- 🧪 KÖR TESTER ---")
+    try:
+        test_dir = os.path.join(BASE_DIR, "tests")
+        subprocess.run(["pytest", test_dir], check=True, shell=False)
+        print("✅ Alla tester godkända.")
+    except FileNotFoundError:
+        print("⚠️  Kunde inte hitta 'pytest'. Installera det med 'pip install pytest pytest-asyncio'.")
+        sys.exit(1)
+    except subprocess.CalledProcessError:
+        print("\n❌ Testerna misslyckades! Åtgärda felen innan release.")
+        sys.exit(1)
+
 def main():
     # 1. Säkerhetskollar
+    check_branch()
+    run_tests()
     check_for_updates()
 
     # 2. Hämta nuvarande version
@@ -85,7 +116,9 @@ def main():
     choice = input("Val: ")
     
     type_map = {"1": "patch", "2": "minor", "3": "major"}
-    if choice not in type_map: return
+    if choice not in type_map:
+        print("❌ Ogiltigt val. Avbryter.")
+        return
 
     new_ver = bump_version(current_ver, type_map[choice])
     print(f"➡️  Ny version blir: {new_ver}")
