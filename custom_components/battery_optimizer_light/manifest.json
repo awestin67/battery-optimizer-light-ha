@@ -7,8 +7,9 @@
   "config_flow": true,
   "documentation": "https://github.com/awestin67/battery-optimizer-light-ha",
   "iot_class": "cloud_polling",
-  "version": "0.3.0",
+  "issue_tracker": "https://github.com/awestin67/battery-optimizer-light-ha/issues",
   "requirements": [
     "aiohttp"
-  ]
+  ],
+  "version": "0.2.12"
 }
