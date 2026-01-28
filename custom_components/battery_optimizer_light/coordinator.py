@@ -2,7 +2,6 @@ import logging
 import aiohttp
 from datetime import timedelta
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
         """Körs var 5:e minut."""
         try:
             # 1. Hämta SOC
-            soc = None 
+            soc = None
             soc_state = self.hass.states.get(self.soc_entity)
 
             # Kontrollera om sensorn är giltig
@@ -32,7 +31,7 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
                 try:
                     soc = float(soc_state.state)
                 except ValueError:
-                    raise UpdateFailed(f"SoC value is not a number: {soc_state.state}")
+                    raise UpdateFailed(f"SoC value is not a number: {soc_state.state}") from None
             else:
                 # VIKTIGT: Om sensorn är otillgänglig, avbryt istället för att gissa!
                 # Detta gör att inget skickas till backend denna gång.
@@ -44,7 +43,7 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
                 "api_key": self.api_key,
                 "soc": soc
             }
-            
+
             _LOGGER.debug(f"Light-Request: {payload}")
 
             async with aiohttp.ClientSession() as session:
@@ -52,9 +51,9 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
                     if response.status != 200:
                         text = await response.text()
                         raise UpdateFailed(f"Server {response.status}: {text}")
-                    
+
                     return await response.json()
 
         except Exception as err:
             _LOGGER.error(f"Light-Error: {err}")
-            raise UpdateFailed(f"Connection error: {err}")
+            raise UpdateFailed(f"Connection error: {err}") from err

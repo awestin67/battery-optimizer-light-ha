@@ -5,14 +5,14 @@ run_peak_guard:
     virtual_load_entity:
       description: Sensorn som visar husets virtuella last (utan batteri).
       example: sensor.husets_netto_last_virtuell
-      required: true
+      required: false
       selector:
         entity:
           domain: sensor
     limit_entity:
       description: Sensor eller Input Number som anger gränsvärdet (kW eller W).
       example: sensor.optimizer_light_peak_limit
-      required: true
+      required: false
       selector:
         entity:
           domain: 

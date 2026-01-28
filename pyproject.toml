@@ -1,0 +1,10 @@
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# Ignorera import-placering i tester (eftersom vi mockar sys.modules)
+"tests/test_core.py" = ["E402"]

@@ -2,7 +2,15 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers.selector import EntitySelector, EntitySelectorConfig
-from .const import *
+from .const import (
+    DOMAIN,
+    CONF_API_URL,
+    DEFAULT_API_URL,
+    CONF_API_KEY,
+    CONF_SOC_SENSOR,
+    CONF_GRID_SENSOR,
+    CONF_BATTERY_POWER_SENSOR,
+)
 
 class BatteryOptimizerLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
@@ -14,9 +22,15 @@ class BatteryOptimizerLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema({
             vol.Required(CONF_API_URL, default=DEFAULT_API_URL): str,
             vol.Required(CONF_API_KEY): str,
-            vol.Required(CONF_SOC_SENSOR): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="battery")),
-            vol.Required(CONF_GRID_SENSOR): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
-            vol.Required(CONF_BATTERY_POWER_SENSOR): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
+            vol.Required(CONF_SOC_SENSOR): EntitySelector(
+                EntitySelectorConfig(domain="sensor", device_class="battery")
+            ),
+            vol.Required(CONF_GRID_SENSOR): EntitySelector(
+                EntitySelectorConfig(domain="sensor", device_class="power")
+            ),
+            vol.Required(CONF_BATTERY_POWER_SENSOR): EntitySelector(
+                EntitySelectorConfig(domain="sensor", device_class="power")
+            ),
         })
 
         return self.async_show_form(step_id="user", data_schema=schema)
@@ -39,20 +53,26 @@ class BatteryOptimizerLightOptionsFlow(config_entries.OptionsFlow):
 
             # HÄR ÄR FIXEN: Vi skriver över grundkonfigurationen direkt
             self.hass.config_entries.async_update_entry(
-                self.config_entry, 
+                self.config_entry,
                 data=user_input
             )
             return self.async_create_entry(title="", data={})
-        
+
         # Vi läser nuvarande värden direkt från grunddatan
         data = self.config_entry.data
-        
+
         schema = vol.Schema({
             vol.Required(CONF_API_URL, default=data.get(CONF_API_URL, DEFAULT_API_URL)): str,
             vol.Required(CONF_API_KEY, default=data.get(CONF_API_KEY, "")): str,
-            vol.Required(CONF_SOC_SENSOR, default=data.get(CONF_SOC_SENSOR)): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="battery")),
-            vol.Required(CONF_GRID_SENSOR, default=data.get(CONF_GRID_SENSOR)): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
-            vol.Required(CONF_BATTERY_POWER_SENSOR, default=data.get(CONF_BATTERY_POWER_SENSOR)): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
+            vol.Required(CONF_SOC_SENSOR, default=data.get(CONF_SOC_SENSOR)): EntitySelector(
+                EntitySelectorConfig(domain="sensor", device_class="battery")
+            ),
+            vol.Required(CONF_GRID_SENSOR, default=data.get(CONF_GRID_SENSOR)): EntitySelector(
+                EntitySelectorConfig(domain="sensor", device_class="power")
+            ),
+            vol.Required(CONF_BATTERY_POWER_SENSOR, default=data.get(CONF_BATTERY_POWER_SENSOR)): EntitySelector(
+                EntitySelectorConfig(domain="sensor", device_class="power")
+            ),
         })
 
         return self.async_show_form(step_id="init", data_schema=schema)

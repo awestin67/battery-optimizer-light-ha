@@ -4,7 +4,13 @@ from homeassistant.core import HomeAssistant, ServiceCall, CoreState
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.event import async_track_state_change_event
 from .coordinator import BatteryOptimizerLightCoordinator
-from .const import *
+from .const import (
+    DOMAIN,
+    CONF_SOC_SENSOR,
+    CONF_BATTERY_POWER_SENSOR,
+    CONF_API_URL,
+    CONF_API_KEY,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -15,7 +21,7 @@ LIMIT_ENTITY = "sensor.optimizer_light_peak_limit"
 async def async_setup_entry(hass: HomeAssistant, entry):
     """Set up from a config entry."""
     config = entry.data
-    
+
     coordinator = BatteryOptimizerLightCoordinator(hass, config)
     await coordinator.async_config_entry_first_refresh()
 
@@ -34,7 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     entry.async_on_unload(
         async_track_state_change_event(hass, [VIRTUAL_LOAD_ENTITY], on_load_change)
     )
-    
+
     _LOGGER.info(f"PeakGuard active. Silently monitoring {VIRTUAL_LOAD_ENTITY}")
 
     async def handle_run_peak_guard(call: ServiceCall):
@@ -51,12 +57,12 @@ async def async_setup_entry(hass: HomeAssistant, entry):
 
 class PeakGuard:
     """Hanterar logiken för effektvakten."""
-    
+
     def __init__(self, hass: HomeAssistant, config, coordinator):
         self.hass = hass
         self.config = config
         self.coordinator = coordinator
-        self._has_reported = False 
+        self._has_reported = False
 
     async def update(self, virtual_load_id, limit_id):
         try:
@@ -64,7 +70,7 @@ class PeakGuard:
             limit_state = self.hass.states.get(limit_id)
             if not limit_state or limit_state.state in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
                 return
-            
+
             raw_limit = float(limit_state.state)
             limit_w = raw_limit * 1000 if raw_limit < 100 else raw_limit
 
@@ -76,31 +82,35 @@ class PeakGuard:
 
             # --- TYST FILTER ---
             wake_up_threshold = limit_w * 0.90
-            
+
             if not self._has_reported and current_load < wake_up_threshold:
-                return 
+                return
 
             # 3. Hämta SoC
             soc_entity = self.config.get(CONF_SOC_SENSOR)
             soc_state = self.hass.states.get(soc_entity)
-            soc = float(soc_state.state) if soc_state and soc_state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE] else 0
+            soc = (
+                float(soc_state.state)
+                if soc_state and soc_state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE]
+                else 0
+            )
 
             # 4. Gränser
             safe_limit = limit_w - 1000
 
             # --- LOGIK ---
-            
+
             # FALL 1: FAROZON (Last > Gräns)
             if current_load > limit_w and soc > 5:
                 if not self._has_reported:
                     _LOGGER.info(f"🚨 PEAK DETECTED! Load: {current_load} W > Limit: {limit_w} W. Engaging battery.")
                     await self._report_peak(current_load, limit_w)
                     self._has_reported = True
-                
+
                 max_inverter = 3300
                 need = current_load - limit_w
                 power_to_discharge = min(need, max_inverter)
-                
+
                 await self._call_script("sonnen_force_discharge", {"power": int(power_to_discharge)})
 
             # FALL 2: SÄKER ZON (Last <= Safe Limit)
@@ -108,7 +118,7 @@ class PeakGuard:
                 if self._has_reported:
                     _LOGGER.info(f"✅ PEAK CLEARED. Load: {current_load} W. Returning to strategy.")
                     self._has_reported = False # Reset
-                
+
                 # --- HÄR ÄR FIXEN ---
                 # Hämta action säkert. Default till "HOLD" (Säkert) istället för "IDLE" (Dränerande).
                 cloud_action = "HOLD"
@@ -117,7 +127,7 @@ class PeakGuard:
 
                 if cloud_action in ["DISCHARGE", "CHARGE"]:
                     pass # Låt molnet bestämma
-                
+
                 elif cloud_action == "HOLD":
                     # Se till att batteriet vilar
                     bat_entity = self.config.get(CONF_BATTERY_POWER_SENSOR)
@@ -125,11 +135,11 @@ class PeakGuard:
                     bat_power = float(bat_state.state) if bat_state else 0
                     if abs(bat_power) > 100:
                         await self._call_script("sonnen_force_charge", {"power": 0})
-                
-                elif cloud_action == "IDLE": 
+
+                elif cloud_action == "IDLE":
                     # Endast om molnet EXPLICIT säger IDLE går vi till Auto
                     await self._call_script("sonnen_set_auto_mode", {})
-                
+
                 else:
                     # Okänt läge (eller None) -> Gör INGENTING (Säkrare än Auto)
                     pass
