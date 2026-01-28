@@ -1,4 +1,20 @@
-report_peak:
-  name: Rapportera Effekttopp
-  description: Läser av din konfigurerade nätsensor och skickar en rapport till molnet om att effektvakten har aktiverats.
-  fields: {}
+run_peak_guard:
+  name: Kör Effektvakt
+  description: Kör logiken för Peak Shaving. Ska anropas av automation när lasten ändras.
+  fields:
+    virtual_load_entity:
+      description: Sensorn som visar husets virtuella last (utan batteri).
+      example: sensor.husets_netto_last_virtuell
+      required: true
+      selector:
+        entity:
+          domain: sensor
+    limit_entity:
+      description: Sensor eller Input Number som anger gränsvärdet (kW eller W).
+      example: sensor.optimizer_light_peak_limit
+      required: true
+      selector:
+        entity:
+          domain: 
+            - sensor
+            - input_number

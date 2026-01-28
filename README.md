@@ -9,7 +9,9 @@ Den kombinerar **Moln-intelligens** (för prisoptimering och statistik) med **Lo
 ## ✨ Funktioner
 
 * **📈 Prisoptimering (Arbitrage):** Laddar billigt, säljer dyrt baserat på spotpris och prognos.
-* **🛡️ Effektvakt (Peak Shaving):** Övervakar husets förbrukning i realtid via dina lokala sensorer. Kapar toppar direkt via automationer och rapporterar statistiken till molnet.
+* **🛡️ Smart Effektvakt (Peak Shaving):** * Övervakar husets nettolast i realtid.
+    * **Hysteres:** Startar urladdning direkt vid topp, men slutar först när lasten sjunkit rejält (1000W) under gränsen för att undvika "fladder".
+    * **Rapportering:** Skickar statistik till molnet (max 1 gång per topp).
 * **⛄ Vinterbuffert:** Sparar en valfri % av batteriet som *aldrig* säljs, utan sparas för nödlägen.
 * **📊 Statistik:** Se "Top 3" effekttoppar och besparingshistorik i en snygg Web Dashboard.
 
@@ -78,7 +80,7 @@ Kopiera dessa automationer till din `automations.yaml`.
 *Dessa automationer ger dig full kontroll lokalt, samtidigt som de rapporterar statistik till molnet.*
 
 ### 1. Huvudstyrenhet (Utför Beslut)
-*Lyssnar på molnet var 5:e minut och styr batteriet. Om molnet säger "IDLE" parkeras batteriet (0W).*
+*Lyssnar på molnet var 5:e minut och styr batteriet. Om molnet säger "HOLD" parkeras batteriet (0W).*
 
 ```yaml
 alias: 🔋 Battery Optimizer Light - Utför Beslut (Sonnen API)
@@ -136,66 +138,24 @@ actions:
 mode: single
 ```
 ### 2. Effektvakt (Peak Shaving)
-Undviker effektspikar i realtid. Använder den virtuella lasten för stabilitet och återgår till viloläge (HOLD) direkt när toppen är kapad.
+Denna automation väcker bara integrationen när lasten ändras. All logik (Hysteres, Rapportering, Styrning) sker nu automatiskt i Python-koden.
 ```yaml
-alias: ✅ Effektvakt - Kapa toppar
-description: ""
+alias: ✅ Effektvakt - Trigger
+description: >-
+  Trigger för batterioptimeringens effektvakt. All logik hanteras av
+  integrationen (PeakGuard).
+mode: restart
 triggers:
   - trigger: state
     entity_id: sensor.husets_netto_last_virtuell
   - trigger: time_pattern
     seconds: /30
 actions:
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ current_load > limit_w }}"
-          - condition: template
-            value_template: "{{ soc > 5 }}"
-        sequence:
-          - action: script.sonnen_force_discharge
-            data:
-              power: >
-                {% set max_inverter = 3300 %} {% set need = current_load -
-                limit_w %} {{ [need, max_inverter] | min | int }}
-      - conditions:
-          - condition: template
-            value_template: "{{ current_load <= safe_limit }}"
-        sequence:
-          - choose:
-              - conditions:
-                  - condition: state
-                    entity_id: sensor.optimizer_light_action
-                    state: DISCHARGE
-                sequence: []
-              - conditions:
-                  - condition: state
-                    entity_id: sensor.optimizer_light_action
-                    state: CHARGE
-                sequence: []
-              - conditions:
-                  - condition: state
-                    entity_id: sensor.optimizer_light_action
-                    state: HOLD
-                  - condition: template
-                    value_template: >-
-                      {{ states('sensor.sonnen_battery_power_w') | float(0) |
-                      abs > 100 }}
-                sequence:
-                  - action: script.sonnen_force_charge
-                    data:
-                      power: 0
-              - conditions:
-                  - condition: state
-                    entity_id: sensor.optimizer_light_action
-                    state: IDLE
-                sequence:
-                  - action: script.sonnen_set_auto_mode
-            default: []
-mode: restart
-variables:
-  current_load: "{{ states('sensor.husets_netto_last_virtuell') | float(0) }}"
-  limit_w: "{{ states('sensor.optimizer_light_peak_limit') | float(10) * 1000 }}"
-  soc: "{{ states('sensor.sonnen_usoc') | float(0) }}"
-  safe_limit: "{{ limit_w - 1000 }}"
+  # Anropar integrationens smarta tjänst
+  - action: battery_optimizer_light.run_peak_guard
+    data:
+      # Peka ut din virtuella sensor
+      virtual_load_entity: sensor.husets_netto_last_virtuell
+      # Peka ut gränsvärdet (Sensor från molnet ELLER Input Number)
+      limit_entity: sensor.optimizer_light_peak_limit
 ```
