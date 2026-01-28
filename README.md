@@ -118,10 +118,14 @@ actions:
       - conditions:
           - condition: template
             value_template: "{{ current_action == 'HOLD' }}"
+          - condition: template
+            value_template: >-
+              {{ states('sensor.sonnen_battery_power_w') | float(0) |
+              abs > 100 }}
         sequence:
-          - data:
+          - action: script.sonnen_force_charge
+            data:
               power: 0
-            action: script.sonnen_force_charge
       - conditions:
           - condition: template
             value_template: "{{ current_action == 'IDLE' }}"
@@ -134,33 +138,64 @@ mode: single
 ### 2. Effektvakt (Peak Shaving)
 Undviker effektspikar i realtid. Använder den virtuella lasten för stabilitet och återgår till viloläge (HOLD) direkt när toppen är kapad.
 ```yaml
-alias: ✅ Effektvakt - Kapa toppar (Stabil)
-mode: restart
+alias: ✅ Effektvakt - Kapa toppar
+description: ""
 triggers:
   - trigger: state
     entity_id: sensor.husets_netto_last_virtuell
   - trigger: time_pattern
     seconds: /30
-variables:
-  current_load: "{{ states('sensor.husets_netto_last_virtuell') | float(0) }}"
-  limit_w: "{{ states('sensor.optimizer_light_peak_limit') | float(10) * 1000 }}"
-  soc: "{{ states('sensor.sonnen_usoc') | float(0) }}"
 actions:
   - choose:
       - conditions:
-          - "{{ current_load > limit_w }}"
-          - "{{ soc > 5 }}"
+          - condition: template
+            value_template: "{{ current_load > limit_w }}"
+          - condition: template
+            value_template: "{{ soc > 5 }}"
         sequence:
           - action: script.sonnen_force_discharge
             data:
               power: >
-                {% set max_inverter = 3300 %}
-                {% set need = current_load - limit_w %}
-                {# Skicka behovet, men aldrig mer än växelriktaren klarar #}
-                {{ [need, max_inverter] | min | int }}
+                {% set max_inverter = 3300 %} {% set need = current_load -
+                limit_w %} {{ [need, max_inverter] | min | int }}
       - conditions:
-          - "{{ current_load <= limit_w }}"
+          - condition: template
+            value_template: "{{ current_load <= safe_limit }}"
         sequence:
-          - action: script.sonnen_force_charge
-            data: { power: 0 }
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: sensor.optimizer_light_action
+                    state: DISCHARGE
+                sequence: []
+              - conditions:
+                  - condition: state
+                    entity_id: sensor.optimizer_light_action
+                    state: CHARGE
+                sequence: []
+              - conditions:
+                  - condition: state
+                    entity_id: sensor.optimizer_light_action
+                    state: HOLD
+                  - condition: template
+                    value_template: >-
+                      {{ states('sensor.sonnen_battery_power_w') | float(0) |
+                      abs > 100 }}
+                sequence:
+                  - action: script.sonnen_force_charge
+                    data:
+                      power: 0
+              - conditions:
+                  - condition: state
+                    entity_id: sensor.optimizer_light_action
+                    state: IDLE
+                sequence:
+                  - action: script.sonnen_set_auto_mode
+            default: []
+mode: restart
+variables:
+  current_load: "{{ states('sensor.husets_netto_last_virtuell') | float(0) }}"
+  limit_w: "{{ states('sensor.optimizer_light_peak_limit') | float(10) * 1000 }}"
+  soc: "{{ states('sensor.sonnen_usoc') | float(0) }}"
+  safe_limit: "{{ limit_w - 1000 }}"
 ```
