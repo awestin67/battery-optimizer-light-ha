@@ -1,11 +1,18 @@
 import logging
 import aiohttp
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, CoreState
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.helpers.event import async_track_state_change_event
 from .coordinator import BatteryOptimizerLightCoordinator
 from .const import *
 
 _LOGGER = logging.getLogger(__name__)
+
+# --- KONFIGURATION ---
+# Dessa sensorer bevakas automatiskt av integrationen.
+# Kontrollera att namnen stämmer med dina entiteter.
+VIRTUAL_LOAD_ENTITY = "sensor.husets_netto_last_virtuell"
+LIMIT_ENTITY = "sensor.optimizer_light_peak_limit"
 
 async def async_setup_entry(hass: HomeAssistant, entry):
     """Set up from a config entry."""
@@ -17,20 +24,29 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # Initiera PeakGuard (Logik-motorn)
+    # Initiera PeakGuard
     peak_guard = PeakGuard(hass, config, coordinator)
 
-    # --- REGISTRERA TJÄNSTEN SOM AUTOMATIONEN ANROPAR ---
-    async def handle_run_peak_guard(call: ServiceCall):
-        """Huvudtjänst som anropas av automationen."""
-        # Hämta entitets-IDn från automationens 'data'-block
-        virtual_load_id = call.data.get("virtual_load_entity")
-        limit_id = call.data.get("limit_entity")
-        
-        # Kör logiken
-        await peak_guard.update(virtual_load_id, limit_id)
+    # --- BAKGRUNDSBEVAKNING (Ersätter Automationen) ---
+    async def on_load_change(event):
+        """Körs tyst i bakgrunden varje gång lasten ändras."""
+        # Vi kör bara om HA är fullt startat för att undvika fel vid boot
+        if hass.state == CoreState.running:
+            await peak_guard.update(VIRTUAL_LOAD_ENTITY, LIMIT_ENTITY)
 
-    # Registrera tjänsten så den syns i Home Assistant
+    # Starta prenumeration på sensorn. Detta syns INTE i loggen.
+    entry.async_on_unload(
+        async_track_state_change_event(hass, [VIRTUAL_LOAD_ENTITY], on_load_change)
+    )
+    
+    _LOGGER.info(f"PeakGuard active. Silently monitoring {VIRTUAL_LOAD_ENTITY}")
+
+    # Manuell tjänst (Bra att ha kvar för felsökning/test)
+    async def handle_run_peak_guard(call: ServiceCall):
+        v_load = call.data.get("virtual_load_entity", VIRTUAL_LOAD_ENTITY)
+        limit = call.data.get("limit_entity", LIMIT_ENTITY)
+        await peak_guard.update(v_load, limit)
+
     hass.services.async_register(DOMAIN, "run_peak_guard", handle_run_peak_guard)
 
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
@@ -39,59 +55,57 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     return True
 
 class PeakGuard:
-    """Hanterar logiken för effektvakten (Filter, Hysteres, Rapportering)."""
+    """Hanterar logiken för effektvakten."""
     
     def __init__(self, hass: HomeAssistant, config, coordinator):
         self.hass = hass
         self.config = config
         self.coordinator = coordinator
-        self._has_reported = False # Minne: Har vi rapporterat denna topp än?
+        self._has_reported = False 
+        self._last_log_level = "quiet" # För att undvika spam även internt
 
     async def update(self, virtual_load_id, limit_id):
         try:
-            # 1. Hämta Gränsvärdet (Krävs för filtret)
+            # 1. Hämta Gränsvärdet
             limit_state = self.hass.states.get(limit_id)
             if not limit_state or limit_state.state in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
                 return
             
             raw_limit = float(limit_state.state)
-            # Smart konvertering: Om < 100, anta kW och gör om till Watt
             limit_w = raw_limit * 1000 if raw_limit < 100 else raw_limit
 
-            # 2. Hämta Nuvarande Last
+            # 2. Hämta Lasten
             load_state = self.hass.states.get(virtual_load_id)
             if not load_state or load_state.state in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
                 return
             current_load = float(load_state.state)
 
-            # --- DYNAMISKT FILTER (Optimerar prestanda) ---
-            # Eftersom automationen triggar ofta, gör vi en snabbkoll här.
-            # Om vi INTE redan jobbar med en topp, och lasten är under 90% av gränsen:
-            # Avbryt direkt. Spara CPU och loggutrymme.
-            
+            # --- TYST FILTER ---
+            # Om vi INTE jobbar med en topp, och lasten är under 90% av gränsen -> Avsluta tyst.
             wake_up_threshold = limit_w * 0.90
             
             if not self._has_reported and current_load < wake_up_threshold:
                 return 
 
-            # 3. Hämta SoC (Körs bara om vi passerat filtret)
+            # 3. Hämta SoC
             soc_entity = self.config.get(CONF_SOC_SENSOR)
             soc_state = self.hass.states.get(soc_entity)
             soc = float(soc_state.state) if soc_state and soc_state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE] else 0
 
-            # 4. Hysteres (Safe Limit = 1000W under gränsen)
+            # 4. Gränser
             safe_limit = limit_w - 1000
 
-            # --- HUVUDLOGIK ---
+            # --- LOGIK ---
             
             # FALL 1: FAROZON (Last > Gräns)
             if current_load > limit_w and soc > 5:
-                # A. Rapportera till molnet (En gång per topp)
+                # Logga bara när vi GÅR IN i toppen
                 if not self._has_reported:
+                    _LOGGER.info(f"🚨 PEAK DETECTED! Load: {current_load} W > Limit: {limit_w} W. Engaging battery.")
                     await self._report_peak(current_load, limit_w)
                     self._has_reported = True
                 
-                # B. Reglera batteriet
+                # Här kör vi regleringen tyst (annars spammas loggen vid varje watt-ändring)
                 max_inverter = 3300
                 need = current_load - limit_w
                 power_to_discharge = min(need, max_inverter)
@@ -100,26 +114,25 @@ class PeakGuard:
 
             # FALL 2: SÄKER ZON (Last <= Safe Limit)
             elif current_load <= safe_limit:
-                # A. Återställ rapporterings-flaggan
-                self._has_reported = False 
+                # Logga bara när vi GÅR UR toppen
+                if self._has_reported:
+                    _LOGGER.info(f"✅ PEAK CLEARED. Load: {current_load} W. Returning to strategy.")
+                    self._has_reported = False # Reset
                 
-                # B. Kolla vad molnet vill göra (via coordinatorn)
+                # Strategi-check (Molnet)
                 cloud_action = self.coordinator.data.get("action", "IDLE")
 
                 if cloud_action in ["DISCHARGE", "CHARGE"]:
-                    pass # Låt molnets strategi (Arbitrage) fortsätta
-                
+                    pass 
                 elif cloud_action == "HOLD":
-                    # Anti-spam: Stäng bara av om batteriet faktiskt rör sig (>100W)
                     bat_entity = self.config.get(CONF_BATTERY_POWER_SENSOR)
                     bat_state = self.hass.states.get(bat_entity)
                     bat_power = float(bat_state.state) if bat_state else 0
                     if abs(bat_power) > 100:
                         await self._call_script("sonnen_force_charge", {"power": 0})
-                
                 else: 
-                    # Default: IDLE/Auto
-                    # Vi sätter Auto-läge här för att garantera återgång efter en topp.
+                    # Försiktighetsåtgärd: Skicka bara auto-mode om vi precis kom ur en topp
+                    # eller om vi vill vara säkra (men scriptet hanterar oftast detta väl)
                     await self._call_script("sonnen_set_auto_mode", {})
 
         except Exception as e:
@@ -137,12 +150,11 @@ class PeakGuard:
             async with aiohttp.ClientSession() as session:
                 async with session.post(api_url, json=payload) as resp:
                     if resp.status == 200:
-                        _LOGGER.info(f"Reported Peak: {payload['grid_power_kw']} kW")
+                        _LOGGER.debug(f"Cloud Report Sent: {payload['grid_power_kw']} kW") # DEBUG nivå, syns ej i standardlogg
         except Exception as e:
             _LOGGER.error(f"Failed to report peak: {e}")
 
     async def _call_script(self, script_name, data):
-        """Hjälpfunktion för att anropa HA-tjänster."""
         await self.hass.services.async_call("script", script_name, service_data=data)
 
 
