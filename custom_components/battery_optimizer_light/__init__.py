@@ -50,7 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
 
     hass.services.async_register(DOMAIN, "run_peak_guard", handle_run_peak_guard)
 
-    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "binary_sensor"])
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
     return True
@@ -179,7 +179,7 @@ async def update_listener(hass, entry):
     await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_unload_entry(hass, entry):
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["sensor"])
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["sensor", "binary_sensor"])
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
     return unload_ok
