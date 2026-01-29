@@ -66,6 +66,15 @@ class PeakGuard:
 
     async def update(self, virtual_load_id, limit_id):
         try:
+            # 0. Kontrollera om Peak Shaving är aktivt
+            is_active = True
+            if self.coordinator.data:
+                is_active = self.coordinator.data.get("is_peak_shaving_active", True)
+
+            if not is_active:
+                self._has_reported = False
+                return
+
             # 1. Hämta Gränsvärdet
             limit_state = self.hass.states.get(limit_id)
             if not limit_state or limit_state.state in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
