@@ -7,6 +7,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     async_add_entities([
         BatteryLightPeakShavingActiveSensor(coordinator),
+        BatteryLightPeakGuardStateSensor(coordinator),
     ])
 
 class BatteryLightPeakShavingActiveSensor(CoordinatorEntity, BinarySensorEntity):
@@ -20,3 +21,16 @@ class BatteryLightPeakShavingActiveSensor(CoordinatorEntity, BinarySensorEntity)
     def is_on(self):
         # Default till True om värdet saknas, precis som i logiken
         return self.coordinator.data.get("is_peak_shaving_active", True)
+
+class BatteryLightPeakGuardStateSensor(CoordinatorEntity, BinarySensorEntity):
+    def __init__(self, coordinator):
+        super().__init__(coordinator)
+        self._attr_name = "Optimizer Light Peak Guard Triggered"
+        self._attr_unique_id = f"{coordinator.api_key}_peak_guard_triggered"
+        self._attr_icon = "mdi:alert-circle-check"
+
+    @property
+    def is_on(self):
+        if hasattr(self.coordinator, "peak_guard"):
+            return self.coordinator.peak_guard.is_active
+        return False

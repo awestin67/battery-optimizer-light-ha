@@ -30,6 +30,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
 
     # Initiera PeakGuard
     peak_guard = PeakGuard(hass, config, coordinator)
+    coordinator.peak_guard = peak_guard
 
     # --- BAKGRUNDSBEVAKNING ---
     async def on_load_change(event):
@@ -64,6 +65,15 @@ class PeakGuard:
         self.coordinator = coordinator
         self._has_reported = False
 
+    @property
+    def is_active(self):
+        return self._has_reported
+
+    def _set_reported_state(self, state: bool):
+        if self._has_reported != state:
+            self._has_reported = state
+            self.coordinator.async_update_listeners()
+
     async def update(self, virtual_load_id, limit_id):
         try:
             # 0. Kontrollera om Peak Shaving är aktivt
@@ -72,7 +82,7 @@ class PeakGuard:
                 is_active = self.coordinator.data.get("is_peak_shaving_active", True)
 
             if not is_active:
-                self._has_reported = False
+                self._set_reported_state(False)
                 return
 
             # 1. Hämta Gränsvärdet
@@ -114,7 +124,7 @@ class PeakGuard:
                 if not self._has_reported:
                     _LOGGER.info(f"🚨 PEAK DETECTED! Load: {current_load} W > Limit: {limit_w} W. Engaging battery.")
                     await self._report_peak(current_load, limit_w)
-                    self._has_reported = True
+                    self._set_reported_state(True)
 
                 max_inverter = 3300
                 need = current_load - limit_w
@@ -126,7 +136,7 @@ class PeakGuard:
             elif current_load <= safe_limit:
                 if self._has_reported:
                     _LOGGER.info(f"✅ PEAK CLEARED. Load: {current_load} W. Returning to strategy.")
-                    self._has_reported = False # Reset
+                    self._set_reported_state(False) # Reset
 
                 # --- HÄR ÄR FIXEN ---
                 # Hämta action säkert. Default till "HOLD" (Säkert) istället för "IDLE" (Dränerande).

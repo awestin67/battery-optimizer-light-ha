@@ -54,7 +54,27 @@ class BatteryLightReasonSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def state(self):
+        if hasattr(self.coordinator, "peak_guard") and self.coordinator.peak_guard.is_active:
+            return "Local Peak Guard Triggered"
         return self.coordinator.data.get("reason", "")
+
+    @property
+    def extra_state_attributes(self):
+        """Visar detaljerad status för Peak Guard."""
+        data = self.coordinator.data or {}
+        is_active = data.get("is_peak_shaving_active", True)
+
+        is_triggered = False
+        if hasattr(self.coordinator, "peak_guard"):
+            is_triggered = self.coordinator.peak_guard.is_active
+
+        status = "Disabled"
+        if is_active:
+            status = "Triggered" if is_triggered else "Monitoring"
+
+        return {
+            "peak_guard_status": status
+        }
 
 class BatteryLightBufferSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator):

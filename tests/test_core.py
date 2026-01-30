@@ -59,7 +59,10 @@ import pytest  # noqa: E402
 from unittest.mock import AsyncMock  # noqa: E402
 from custom_components.battery_optimizer_light.coordinator import BatteryOptimizerLightCoordinator  # noqa: E402
 from custom_components.battery_optimizer_light import PeakGuard  # noqa: E402
-from custom_components.battery_optimizer_light.binary_sensor import BatteryLightPeakShavingActiveSensor  # noqa: E402
+from custom_components.battery_optimizer_light.binary_sensor import (  # noqa: E402
+    BatteryLightPeakShavingActiveSensor,
+    BatteryLightPeakGuardStateSensor
+)
 from homeassistant.helpers.update_coordinator import UpdateFailed  # noqa: E402
 
 # --- MOCK DATA ---
@@ -228,3 +231,16 @@ def test_binary_sensor_peak_shaving_active():
     coordinator.data = {}
     assert sensor.is_on is True
 
+def test_binary_sensor_peak_guard_triggered():
+    """Testar att binärsensorn för aktiv peak guard fungerar."""
+    coordinator = MagicMock()
+    coordinator.api_key = "12345"
+
+    # Mocka peak_guard på coordinatorn
+    peak_guard = MagicMock()
+    peak_guard.is_active = True
+    coordinator.peak_guard = peak_guard
+
+    sensor = BatteryLightPeakGuardStateSensor(coordinator)
+    assert sensor.is_on is True
+    assert sensor._attr_unique_id == "12345_peak_guard_triggered"
