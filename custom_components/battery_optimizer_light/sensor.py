@@ -27,7 +27,7 @@ class BatteryLightActionSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def state(self):
-        return self.coordinator.data.get("action", "UNKNOWN")
+        return (self.coordinator.data or {}).get("action", "UNKNOWN")
 
 class BatteryLightPowerSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator):
@@ -61,7 +61,7 @@ class BatteryLightReasonSensor(CoordinatorEntity, SensorEntity):
             return "Local Peak Guard Triggered"
 
         # 2. Annars visa vad molnet säger (t.ex. "Charging due to cheap price")
-        return self.coordinator.data.get("reason", "Unknown")
+        return (self.coordinator.data or {}).get("reason", "Unknown")
 
 class BatteryLightBufferSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator):
@@ -102,8 +102,9 @@ class BatteryLightStatusSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def state(self):
-        # Hämtar data från coordinator och lokal peak_guard instans
-        is_active = self.coordinator.data.get("is_peak_shaving_active", True)
+        # Hämtar data från coordinator och lokal peak_guard instans. Först säkerställ att data finns.
+        data = self.coordinator.data or {}
+        is_active = data.get("is_peak_shaving_active", True)
 
         is_triggered = False
         if hasattr(self.coordinator, "peak_guard"):
