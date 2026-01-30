@@ -46,12 +46,6 @@ mock_sensor.SensorDeviceClass = MagicMock
 mock_sensor.SensorStateClass = MagicMock
 sys.modules["homeassistant.components.sensor"] = mock_sensor
 
-mock_binary_sensor = MagicMock()
-class MockBinarySensorEntity:
-    pass
-mock_binary_sensor.BinarySensorEntity = MockBinarySensorEntity
-sys.modules["homeassistant.components.binary_sensor"] = mock_binary_sensor
-
 # Lägg till rotmappen i sökvägen så vi kan importera komponenten
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -59,9 +53,6 @@ import pytest  # noqa: E402
 from unittest.mock import AsyncMock  # noqa: E402
 from custom_components.battery_optimizer_light.coordinator import BatteryOptimizerLightCoordinator  # noqa: E402
 from custom_components.battery_optimizer_light import PeakGuard  # noqa: E402
-from custom_components.battery_optimizer_light.binary_sensor import (  # noqa: E402
-    BatteryLightPeakShavingActiveSensor
-)
 from custom_components.battery_optimizer_light.sensor import BatteryLightStatusSensor  # noqa: E402
 from homeassistant.helpers.update_coordinator import UpdateFailed  # noqa: E402
 
@@ -211,25 +202,6 @@ async def test_peak_guard_disabled_by_backend(mock_hass_instance):
 
     # Verify NO calls were made
     mock_hass_instance.services.async_call.assert_not_called()
-
-def test_binary_sensor_peak_shaving_active():
-    """Testar att binärsensorn läser värdet från coordinator."""
-    coordinator = MagicMock()
-    coordinator.api_key = "12345"
-
-    # Fall 1: Aktivt (True)
-    coordinator.data = {"is_peak_shaving_active": True}
-    sensor = BatteryLightPeakShavingActiveSensor(coordinator)
-    assert sensor.is_on is True
-    assert sensor._attr_unique_id == "12345_peak_shaving_active"
-
-    # Fall 2: Inaktivt (False)
-    coordinator.data = {"is_peak_shaving_active": False}
-    assert sensor.is_on is False
-
-    # Fall 3: Saknas (Default True)
-    coordinator.data = {}
-    assert sensor.is_on is True
 
 def test_status_sensor():
     """Testar att status-sensorn visar rätt text (Disabled/Monitoring/Triggered)."""

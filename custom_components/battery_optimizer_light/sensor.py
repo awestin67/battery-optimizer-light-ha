@@ -96,8 +96,8 @@ class BatteryLightPeakSensor(CoordinatorEntity, SensorEntity):
 class BatteryLightStatusSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator):
         super().__init__(coordinator)
-        self._attr_name = "Optimizer Light Status"
-        self._attr_unique_id = f"{coordinator.api_key}_light_status"
+        self._attr_name = "Optimizer Light PeakGuard Status"
+        self._attr_unique_id = f"{coordinator.api_key}_peakguard_status"
 
     @property
     def state(self):

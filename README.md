@@ -13,7 +13,7 @@ Den kombinerar **Moln-intelligens** (för prisoptimering och statistik) med **Lo
 
 * **📈 Prisoptimering (Arbitrage):** Laddar billigt, säljer dyrt baserat på spotpris och prognos.
 * **🛡️ Smart Effektvakt (Peak Shaving):** Övervakar husets nettolast i realtid.
-    * **Molnstyrning:** Effektvakten kan aktiveras/inaktiveras dynamiskt från molnet. Status visas via `sensor.optimizer_light_status`.
+    * **Molnstyrning:** Effektvakten kan aktiveras/inaktiveras dynamiskt från molnet. Status visas via `sensor.optimizer_light_peakguard_status`.
     * **Hysteres:** Startar urladdning direkt vid topp, men slutar först när lasten sjunkit rejält (1000W) under gränsen för att undvika "fladder".
     * **Rapportering:** Skickar statistik till molnet (max 1 gång per topp).
 * **⛄ Vinterbuffert:** Sparar en valfri % av batteriet som *aldrig* säljs, utan sparas för nödlägen.
