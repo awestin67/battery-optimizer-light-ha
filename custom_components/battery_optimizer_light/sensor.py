@@ -14,7 +14,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         BatteryLightPowerSensor(coordinator),
         BatteryLightReasonSensor(coordinator),
         BatteryLightBufferSensor(coordinator),
-        BatteryLightPeakSensor(coordinator)
+        BatteryLightPeakSensor(coordinator),
+        BatteryLightStatusSensor(coordinator)
     ])
 
 class BatteryLightActionSensor(CoordinatorEntity, SensorEntity):
@@ -54,27 +55,13 @@ class BatteryLightReasonSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def state(self):
+        # 1. Kolla först om den lokala effektvakten jobbar
+        # (Detta skriver över molnets status, vilket är korrekt eftersom lokalt skydd har prio)
         if hasattr(self.coordinator, "peak_guard") and self.coordinator.peak_guard.is_active:
             return "Local Peak Guard Triggered"
-        return self.coordinator.data.get("reason", "")
 
-    @property
-    def extra_state_attributes(self):
-        """Visar detaljerad status för Peak Guard."""
-        data = self.coordinator.data or {}
-        is_active = data.get("is_peak_shaving_active", True)
-
-        is_triggered = False
-        if hasattr(self.coordinator, "peak_guard"):
-            is_triggered = self.coordinator.peak_guard.is_active
-
-        status = "Disabled"
-        if is_active:
-            status = "Triggered" if is_triggered else "Monitoring"
-
-        return {
-            "peak_guard_status": status
-        }
+        # 2. Annars visa vad molnet säger (t.ex. "Charging due to cheap price")
+        return self.coordinator.data.get("reason", "Unknown")
 
 class BatteryLightBufferSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator):
@@ -105,3 +92,21 @@ class BatteryLightPeakSensor(CoordinatorEntity, SensorEntity):
     def state(self):
         # Hämta värdet från backend. Default 12.0 (högt) om det saknas för att inte trigga i onödan.
         return self.coordinator.data.get("peak_power_kw", 12.0)
+
+class BatteryLightStatusSensor(CoordinatorEntity, SensorEntity):
+    def __init__(self, coordinator):
+        super().__init__(coordinator)
+        self._attr_name = "Optimizer Light Status"
+        self._attr_unique_id = f"{coordinator.api_key}_light_status"
+        self._attr_icon = "mdi:shield-search"
+
+    @property
+    def state(self):
+        # Hämtar samma data som du tidigare la i attributet
+        # Exempelvis om du la det i 'peak_guard_status' i coordinator data
+        is_active = self.coordinator.data.get("is_peak_shaving_active", False)
+        is_triggered = self.coordinator.data.get("is_peak_guard_triggered", False)
+
+        if not is_active:
+            return "Disabled"
+        return "Triggered" if is_triggered else "Monitoring"
