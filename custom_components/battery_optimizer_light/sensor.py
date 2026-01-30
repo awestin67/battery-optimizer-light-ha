@@ -1,7 +1,7 @@
 from homeassistant.components.sensor import (
     SensorEntity,
-    SensorDeviceClass, # <--- Importera denna
-    SensorStateClass,  # <--- Och denna
+    SensorDeviceClass,
+    SensorStateClass,
 )
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
@@ -44,7 +44,7 @@ class BatteryLightPowerSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def state(self):
-        return self.coordinator.data.get("target_power_kw", 0.0)
+        return (self.coordinator.data or {}).get("target_power_kw", 0.0)
 
 class BatteryLightReasonSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator):
@@ -77,7 +77,7 @@ class BatteryLightBufferSensor(CoordinatorEntity, SensorEntity):
     @property
     def state(self):
         # Hämtar 'min_soc_buffer' från backend JSON. Default 0.0 om det saknas.
-        return self.coordinator.data.get("min_soc_buffer", 0.0)
+        return (self.coordinator.data or {}).get("min_soc_buffer", 0.0)
 
 class BatteryLightPeakSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator):
@@ -91,14 +91,13 @@ class BatteryLightPeakSensor(CoordinatorEntity, SensorEntity):
     @property
     def state(self):
         # Hämta värdet från backend. Default 12.0 (högt) om det saknas för att inte trigga i onödan.
-        return self.coordinator.data.get("peak_power_kw", 12.0)
+        return (self.coordinator.data or {}).get("peak_power_kw", 12.0)
 
 class BatteryLightStatusSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator):
         super().__init__(coordinator)
         self._attr_name = "Optimizer Light Status"
         self._attr_unique_id = f"{coordinator.api_key}_light_status"
-        self._attr_icon = "mdi:shield-search"
 
     @property
     def state(self):
@@ -113,3 +112,13 @@ class BatteryLightStatusSensor(CoordinatorEntity, SensorEntity):
         if not is_active:
             return "Disabled"
         return "Triggered" if is_triggered else "Monitoring"
+
+    @property
+    def icon(self):
+        """Returnerar en dynamisk ikon baserat på status."""
+        status = self.state
+        if status == "Disabled":
+            return "mdi:shield-off"
+        if status == "Triggered":
+            return "mdi:shield-alert"
+        return "mdi:shield-search"

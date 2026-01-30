@@ -60,9 +60,9 @@ from unittest.mock import AsyncMock  # noqa: E402
 from custom_components.battery_optimizer_light.coordinator import BatteryOptimizerLightCoordinator  # noqa: E402
 from custom_components.battery_optimizer_light import PeakGuard  # noqa: E402
 from custom_components.battery_optimizer_light.binary_sensor import (  # noqa: E402
-    BatteryLightPeakShavingActiveSensor,
-    BatteryLightPeakGuardStateSensor
+    BatteryLightPeakShavingActiveSensor
 )
+from custom_components.battery_optimizer_light.sensor import BatteryLightStatusSensor  # noqa: E402
 from homeassistant.helpers.update_coordinator import UpdateFailed  # noqa: E402
 
 # --- MOCK DATA ---
@@ -231,16 +231,29 @@ def test_binary_sensor_peak_shaving_active():
     coordinator.data = {}
     assert sensor.is_on is True
 
-def test_binary_sensor_peak_guard_triggered():
-    """Testar att binärsensorn för aktiv peak guard fungerar."""
+def test_status_sensor():
+    """Testar att status-sensorn visar rätt text (Disabled/Monitoring/Triggered)."""
     coordinator = MagicMock()
     coordinator.api_key = "12345"
+    coordinator.data = {"is_peak_shaving_active": True}
 
     # Mocka peak_guard på coordinatorn
     peak_guard = MagicMock()
-    peak_guard.is_active = True
+    peak_guard.is_active = False
     coordinator.peak_guard = peak_guard
 
-    sensor = BatteryLightPeakGuardStateSensor(coordinator)
-    assert sensor.is_on is True
-    assert sensor._attr_unique_id == "12345_peak_guard_triggered"
+    sensor = BatteryLightStatusSensor(coordinator)
+
+    # Fall 1: Monitoring (Aktiv men inte triggad)
+    assert sensor.state == "Monitoring"
+    assert sensor.icon == "mdi:shield-search"
+
+    # Fall 2: Triggered
+    peak_guard.is_active = True
+    assert sensor.state == "Triggered"
+    assert sensor.icon == "mdi:shield-alert"
+
+    # Fall 3: Disabled
+    coordinator.data = {"is_peak_shaving_active": False}
+    assert sensor.state == "Disabled"
+    assert sensor.icon == "mdi:shield-off"
