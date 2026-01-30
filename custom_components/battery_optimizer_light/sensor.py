@@ -102,10 +102,12 @@ class BatteryLightStatusSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def state(self):
-        # Hämtar samma data som du tidigare la i attributet
-        # Exempelvis om du la det i 'peak_guard_status' i coordinator data
-        is_active = self.coordinator.data.get("is_peak_shaving_active", False)
-        is_triggered = self.coordinator.data.get("is_peak_guard_triggered", False)
+        # Hämtar data från coordinator och lokal peak_guard instans
+        is_active = self.coordinator.data.get("is_peak_shaving_active", True)
+
+        is_triggered = False
+        if hasattr(self.coordinator, "peak_guard"):
+            is_triggered = self.coordinator.peak_guard.is_active
 
         if not is_active:
             return "Disabled"
