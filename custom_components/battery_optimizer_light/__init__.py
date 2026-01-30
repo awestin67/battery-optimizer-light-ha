@@ -64,6 +64,7 @@ class PeakGuard:
         self.config = config
         self.coordinator = coordinator
         self._has_reported = False
+        self._hold_command_sent = False  # Flagga för att undvika upprepade kommandon
 
     @property
     def is_active(self):
@@ -72,6 +73,9 @@ class PeakGuard:
     def _set_reported_state(self, state: bool):
         if self._has_reported != state:
             self._has_reported = state
+            # När vi går in i peak-läge är ett "hold"-kommando inte längre relevant.
+            if state is True:
+                self._hold_command_sent = False
             self.coordinator.async_update_listeners()
 
     async def update(self, virtual_load_id, limit_id):
@@ -82,7 +86,8 @@ class PeakGuard:
                 is_active = self.coordinator.data.get("is_peak_shaving_active", True)
 
             if not is_active:
-                self._set_reported_state(False)
+                if self.is_active:
+                    self._set_reported_state(False)
                 return
 
             # 1. Hämta Gränsvärdet
@@ -101,7 +106,6 @@ class PeakGuard:
 
             # --- TYST FILTER ---
             wake_up_threshold = limit_w * 0.90
-
             if not self._has_reported and current_load < wake_up_threshold:
                 return
 
@@ -117,54 +121,68 @@ class PeakGuard:
             # 4. Gränser
             safe_limit = limit_w - 1000
 
-            # --- LOGIK ---
+            # --- NY LOGIK MED HYSTERES ---
 
-            # FALL 1: FAROZON (Last > Gräns)
-            if current_load > limit_w and soc > 5:
-                if not self._has_reported:
-                    _LOGGER.info(f"🚨 PEAK DETECTED! Load: {current_load} W > Limit: {limit_w} W. Engaging battery.")
-                    await self._report_peak(current_load, limit_w)
-                    self._set_reported_state(True)
+            # Steg 1: Bestäm tillstånd (På / Av)
+            if not self._has_reported and current_load > limit_w and soc > 5:
+                _LOGGER.info(f"🚨 PEAK DETECTED! Load: {current_load} W > Limit: {limit_w} W. Engaging battery.")
+                self._set_reported_state(True)
+                await self._report_peak(current_load, limit_w)
 
+            elif self._has_reported and current_load <= safe_limit:
+                _LOGGER.info(f"✅ PEAK CLEARED. Load: {current_load} W. Returning to strategy.")
+                self._set_reported_state(False)
+
+            # Steg 2: Agera baserat på tillstånd
+            if self._has_reported and soc > 5:
+                # TILLSTÅND PÅ: Justera urladdning
                 max_inverter = 3300
                 need = current_load - limit_w
-                power_to_discharge = min(need, max_inverter)
+                power_to_discharge = min(max(0, need), max_inverter)
 
-                await self._call_script("sonnen_force_discharge", {"power": int(power_to_discharge)})
+                if power_to_discharge > 100:  # Skicka bara kommando om det finns ett verkligt behov
+                    await self._call_script("sonnen_force_discharge", {"power": int(power_to_discharge)})
 
-            # FALL 2: SÄKER ZON (Last <= Safe Limit)
-            elif current_load <= safe_limit:
-                if self._has_reported:
-                    _LOGGER.info(f"✅ PEAK CLEARED. Load: {current_load} W. Returning to strategy.")
-                    self._set_reported_state(False) # Reset
-
-                # --- HÄR ÄR FIXEN ---
-                # Hämta action säkert. Default till "HOLD" (Säkert) istället för "IDLE" (Dränerande).
+            else:
+                # TILLSTÅND AV: Återgå till molnstrategi
                 cloud_action = "HOLD"
                 if self.coordinator.data and "action" in self.coordinator.data:
                     cloud_action = str(self.coordinator.data.get("action")).upper()
 
+                if cloud_action != "HOLD":
+                    self._hold_command_sent = False  # Återställ om molnet vill något annat
+
                 if cloud_action in ["DISCHARGE", "CHARGE"]:
-                    pass # Låt molnet bestämma
+                    pass  # Låt molnet bestämma
 
                 elif cloud_action == "HOLD":
-                    # Se till att batteriet vilar
                     bat_entity = self.config.get(CONF_BATTERY_POWER_SENSOR)
                     bat_state = self.hass.states.get(bat_entity)
-                    bat_power = float(bat_state.state) if bat_state else 0
+                    bat_power = 0
+                    if bat_state and bat_state.state not in [
+                        STATE_UNKNOWN,
+                        STATE_UNAVAILABLE,
+                    ]:
+                        bat_power = float(bat_state.state)
+
                     if abs(bat_power) > 100:
-                        await self._call_script("sonnen_force_charge", {"power": 0})
+                        if not self._hold_command_sent:
+                            _LOGGER.debug("HOLD requested, but battery is active. Sending stop command.")
+                            await self._call_script("sonnen_force_charge", {"power": 0})
+                            self._hold_command_sent = True
+                    else:
+                        # Batteriet är redan stilla, så nollställ flaggan.
+                        if self._hold_command_sent:
+                            _LOGGER.debug("Battery is now idle, resetting hold_command_sent flag.")
+                        self._hold_command_sent = False
 
                 elif cloud_action == "IDLE":
-                    # Endast om molnet EXPLICIT säger IDLE går vi till Auto
                     await self._call_script("sonnen_set_auto_mode", {})
 
                 else:
-                    # Okänt läge (eller None) -> Gör INGENTING (Säkrare än Auto)
-                    pass
-
+                    pass  # Okänt läge -> Gör inget
         except Exception as e:
-            _LOGGER.error(f"Error in PeakGuard: {e}")
+            _LOGGER.error(f"Error in PeakGuard update: {e}", exc_info=True)
 
     async def _report_peak(self, grid_w, limit_w):
         try:
