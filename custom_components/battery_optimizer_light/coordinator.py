@@ -38,10 +38,15 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
                 # Loggar en varning i HA men förstör inte din graf.
                 raise UpdateFailed(f"SoC entity {self.soc_entity} is unavailable. Skipping update.")
 
+            is_solar_override = False
+            if hasattr(self, "peak_guard") and self.peak_guard:
+                is_solar_override = self.peak_guard.is_solar_override
+
             # 2. Payload (Endast det backend behöver)
             payload = {
                 "api_key": self.api_key,
-                "soc": soc
+                "soc": soc,
+                "is_solar_override": is_solar_override
             }
 
             _LOGGER.debug(f"Light-Request: {payload}")

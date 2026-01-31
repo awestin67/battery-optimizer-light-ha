@@ -1,9 +1,9 @@
-from homeassistant.components.sensor import (
+from homeassistant.components.sensor import ( # type: ignore
     SensorEntity,
     SensorDeviceClass,
     SensorStateClass,
 )
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity # type: ignore
 from .const import DOMAIN
 
 async def async_setup_entry(hass, entry, async_add_entities):

@@ -194,6 +194,10 @@ class PeakGuard:
                     cloud_action = "IDLE"  # Tvinga Auto-läge lokalt
 
                 if self._is_solar_override != new_override:
+                    if new_override:
+                        await self._report_solar_override(current_load, limit_w)
+                    else:
+                        await self._report_solar_override_clear(current_load, limit_w)
                     self._is_solar_override = new_override
                     self.coordinator.async_update_listeners()  # Uppdatera sensorer
 
@@ -276,6 +280,36 @@ class PeakGuard:
                         _LOGGER.debug(f"Cloud report sent: PeakGuard Failure: {payload['grid_power_kw']} kW")
         except Exception as e:
             _LOGGER.error(f"Failed to report peak failure: {e}")
+
+    async def _report_solar_override(self, grid_w, limit_w):
+        try:
+            api_url = f"{self.config[CONF_API_URL].rstrip('/')}/report_solar_override"
+            payload = {
+                "api_key": self.config[CONF_API_KEY],
+                "grid_power_kw": round(grid_w / 1000.0, 2),
+                "limit_kw": round(limit_w / 1000.0, 2)
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(api_url, json=payload) as resp:
+                    if resp.status == 200:
+                        _LOGGER.debug(f"Cloud report sent: Solar Override: {payload['grid_power_kw']} kW")
+        except Exception as e:
+            _LOGGER.error(f"Failed to report solar override: {e}")
+
+    async def _report_solar_override_clear(self, grid_w, limit_w):
+        try:
+            api_url = f"{self.config[CONF_API_URL].rstrip('/')}/report_solar_override_clear"
+            payload = {
+                "api_key": self.config[CONF_API_KEY],
+                "grid_power_kw": round(grid_w / 1000.0, 2),
+                "limit_kw": round(limit_w / 1000.0, 2)
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(api_url, json=payload) as resp:
+                    if resp.status == 200:
+                        _LOGGER.debug(f"Cloud report sent: Solar Override Cleared: {payload['grid_power_kw']} kW")
+        except Exception as e:
+            _LOGGER.error(f"Failed to report solar override clear: {e}")
 
     async def _call_script(self, script_name, data):
         await self.hass.services.async_call("script", script_name, service_data=data)
