@@ -65,6 +65,7 @@ class PeakGuard:
         self.coordinator = coordinator
         self._has_reported = False
         self._hold_command_sent = False  # Flagga för att undvika upprepade kommandon
+        self._capacity_exceeded_logged = False  # Flagga för att logga överlast en gång
 
     @property
     def is_active(self):
@@ -76,6 +77,9 @@ class PeakGuard:
             # När vi går in i peak-läge är ett "hold"-kommando inte längre relevant.
             if state is True:
                 self._hold_command_sent = False
+            else:
+                # Återställ flaggor när toppen är över
+                self._capacity_exceeded_logged = False
             self.coordinator.async_update_listeners()
 
     async def update(self, virtual_load_id, limit_id):
@@ -137,8 +141,24 @@ class PeakGuard:
             # Steg 2: Agera baserat på tillstånd
             if self._has_reported and soc > 5:
                 # TILLSTÅND PÅ: Justera urladdning
-                max_inverter = 3300
+                max_inverter = 3300.0
+                if self.coordinator.data and "max_discharge_kw" in self.coordinator.data:
+                    val = self.coordinator.data.get("max_discharge_kw")
+                    if val is not None:
+                        max_inverter = float(val) * 1000.0
+
                 need = current_load - limit_w
+
+                # Detektera om vi inte klarar att hålla gränsen
+                if need > max_inverter:
+                    if not self._capacity_exceeded_logged:
+                        _LOGGER.warning(
+                            f"PeakGuard capacity exceeded! Need: {need} W > Max: {max_inverter} W. "
+                            f"Limit {limit_w} W cannot be held."
+                        )
+                        self._capacity_exceeded_logged = True
+                        await self._report_peak_failure(current_load, limit_w)
+
                 power_to_discharge = min(max(0, need), max_inverter)
 
                 if power_to_discharge > 100:  # Skicka bara kommando om det finns ett verkligt behov
@@ -213,6 +233,21 @@ class PeakGuard:
                         _LOGGER.debug(f"Cloud report sent: PeakGuard Cleared: {payload['grid_power_kw']} kW")
         except Exception as e:
             _LOGGER.error(f"Failed to report peak clear: {e}")
+
+    async def _report_peak_failure(self, grid_w, limit_w):
+        try:
+            api_url = f"{self.config[CONF_API_URL].rstrip('/')}/report_peak_failure"
+            payload = {
+                "api_key": self.config[CONF_API_KEY],
+                "grid_power_kw": round(grid_w / 1000.0, 2),
+                "limit_kw": round(limit_w / 1000.0, 2)
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(api_url, json=payload) as resp:
+                    if resp.status == 200:
+                        _LOGGER.debug(f"Cloud report sent: PeakGuard Failure: {payload['grid_power_kw']} kW")
+        except Exception as e:
+            _LOGGER.error(f"Failed to report peak failure: {e}")
 
     async def _call_script(self, script_name, data):
         await self.hass.services.async_call("script", script_name, service_data=data)

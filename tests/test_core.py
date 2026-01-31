@@ -229,3 +229,50 @@ def test_status_sensor():
     coordinator.data = {"is_peak_shaving_active": False}
     assert sensor.state == "Disabled"
     assert sensor.icon == "mdi:shield-off"
+
+@pytest.mark.asyncio
+async def test_peak_guard_reports_failure_on_overload(mock_hass_instance):
+    """Krav: Om behovet överstiger max växelriktareffekt ska failure rapporteras."""
+    coordinator = MagicMock()
+    # Sätt max_discharge_kw till 3.3 kW (3300 W)
+    coordinator.data = {"action": "HOLD", "max_discharge_kw": 3.3}
+
+    guard = PeakGuard(mock_hass_instance, MOCK_CONFIG, coordinator)
+
+    # Vi simulerar att vi redan är i ett peak-läge (har rapporterat start)
+    guard._has_reported = True
+
+    # Mocka _report_peak_failure metoden för att verifiera anrop utan att göra nätverksanrop
+    guard._report_peak_failure = AsyncMock()
+
+    # Setup sensorvärden
+    # Gräns: 5 kW
+    limit_state = MagicMock()
+    limit_state.state = "5.0"
+
+    # Last: 9 kW. Behov = 9000 - 5000 = 4000 W.
+    # Max inverter = 3300 W.
+    # 4000 > 3300 -> Failure.
+    load_state = MagicMock()
+    load_state.state = "9000"
+
+    # SoC: 50%
+    soc_state = MagicMock()
+    soc_state.state = "50"
+
+    def get_state_side_effect(entity_id):
+        if entity_id == "sensor.optimizer_light_peak_limit":
+            return limit_state
+        if entity_id == "sensor.husets_netto_last_virtuell":
+            return load_state
+        if entity_id == "sensor.soc":
+            return soc_state
+        return None
+
+    mock_hass_instance.states.get.side_effect = get_state_side_effect
+
+    # Kör logiken
+    await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
+
+    # Verifiera att _report_peak_failure anropades med (current_load, limit_w)
+    guard._report_peak_failure.assert_called_with(9000.0, 5000.0)
