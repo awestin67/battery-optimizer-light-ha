@@ -27,7 +27,13 @@ class BatteryLightActionSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def state(self):
-        return (self.coordinator.data or {}).get("action", "UNKNOWN")
+        raw_action = (self.coordinator.data or {}).get("action", "UNKNOWN")
+
+        # Om PeakGuard har aktiverat Solar Override, visa IDLE (Auto) istället för HOLD
+        if hasattr(self.coordinator, "peak_guard") and self.coordinator.peak_guard.is_solar_override:
+            if raw_action == "HOLD":
+                return "IDLE"
+        return raw_action
 
 class BatteryLightPowerSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator):

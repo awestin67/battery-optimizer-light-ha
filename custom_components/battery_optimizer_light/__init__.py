@@ -66,10 +66,15 @@ class PeakGuard:
         self._has_reported = False
         self._hold_command_sent = False  # Flagga för att undvika upprepade kommandon
         self._capacity_exceeded_logged = False  # Flagga för att logga överlast en gång
+        self._is_solar_override = False  # Flagga för sol-override
 
     @property
     def is_active(self):
         return self._has_reported
+
+    @property
+    def is_solar_override(self):
+        return self._is_solar_override
 
     def _set_reported_state(self, state: bool):
         if self._has_reported != state:
@@ -169,6 +174,18 @@ class PeakGuard:
                 cloud_action = "HOLD"
                 if self.coordinator.data and "action" in self.coordinator.data:
                     cloud_action = str(self.coordinator.data.get("action")).upper()
+
+                # --- SOLAR OVERRIDE ---
+                # Om vi exporterar el (negativ last) och molnet säger HOLD,
+                # är det bättre att låta batteriet ladda (Auto) än att tvinga 0W.
+                new_override = False
+                if cloud_action == "HOLD" and current_load < -200:
+                    new_override = True
+                    cloud_action = "IDLE"  # Tvinga Auto-läge lokalt
+
+                if self._is_solar_override != new_override:
+                    self._is_solar_override = new_override
+                    self.coordinator.async_update_listeners()  # Uppdatera sensorer
 
                 if cloud_action != "HOLD":
                     self._hold_command_sent = False  # Återställ om molnet vill något annat
