@@ -115,7 +115,17 @@ class PeakGuard:
 
             # --- TYST FILTER ---
             wake_up_threshold = limit_w * 0.90
-            if not self._has_reported and current_load < wake_up_threshold:
+            # Avbryt bara om:
+            # 1. Ingen peak är aktiv.
+            # 2. Ingen Solar Override är aktiv (vi måste kunna stänga av den).
+            # 3. Lasten är under varningsgränsen.
+            # 4. Vi INTE exporterar (för då måste vi kolla Solar Override).
+            if (
+                not self._has_reported
+                and not self._is_solar_override
+                and current_load < wake_up_threshold
+                and current_load > -200
+            ):
                 return
 
             # 3. Hämta SoC
