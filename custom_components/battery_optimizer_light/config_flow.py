@@ -10,6 +10,7 @@ from .const import (
     CONF_SOC_SENSOR,
     CONF_GRID_SENSOR,
     CONF_BATTERY_POWER_SENSOR,
+    CONF_VIRTUAL_LOAD_SENSOR,
 )
 
 class BatteryOptimizerLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -29,6 +30,9 @@ class BatteryOptimizerLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
             vol.Required(CONF_BATTERY_POWER_SENSOR): EntitySelector(
+                EntitySelectorConfig(domain="sensor", device_class="power")
+            ),
+            vol.Required(CONF_VIRTUAL_LOAD_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
         })
@@ -71,6 +75,9 @@ class BatteryOptimizerLightOptionsFlow(config_entries.OptionsFlow):
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
             vol.Required(CONF_BATTERY_POWER_SENSOR, default=data.get(CONF_BATTERY_POWER_SENSOR)): EntitySelector(
+                EntitySelectorConfig(domain="sensor", device_class="power")
+            ),
+            vol.Required(CONF_VIRTUAL_LOAD_SENSOR, default=data.get(CONF_VIRTUAL_LOAD_SENSOR)): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
         })

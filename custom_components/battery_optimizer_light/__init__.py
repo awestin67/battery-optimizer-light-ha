@@ -10,12 +10,12 @@ from .const import (
     CONF_BATTERY_POWER_SENSOR,
     CONF_API_URL,
     CONF_API_KEY,
+    CONF_VIRTUAL_LOAD_SENSOR,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 # --- KONFIGURATION ---
-VIRTUAL_LOAD_ENTITY = "sensor.husets_netto_last_virtuell"
 LIMIT_ENTITY = "sensor.optimizer_light_peak_limit"
 
 async def async_setup_entry(hass: HomeAssistant, entry):
@@ -32,20 +32,23 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     peak_guard = PeakGuard(hass, config, coordinator)
     coordinator.peak_guard = peak_guard
 
+    # Hämta virtuell last-sensor från config, fallback till gammal default om den saknas
+    virtual_load_entity = config.get(CONF_VIRTUAL_LOAD_SENSOR, "sensor.husets_netto_last_virtuell")
+
     # --- BAKGRUNDSBEVAKNING ---
     async def on_load_change(event):
         """Körs tyst i bakgrunden varje gång lasten ändras."""
         if hass.state == CoreState.running:
-            await peak_guard.update(VIRTUAL_LOAD_ENTITY, LIMIT_ENTITY)
+            await peak_guard.update(virtual_load_entity, LIMIT_ENTITY)
 
     entry.async_on_unload(
-        async_track_state_change_event(hass, [VIRTUAL_LOAD_ENTITY], on_load_change)
+        async_track_state_change_event(hass, [virtual_load_entity], on_load_change)
     )
 
-    _LOGGER.info(f"PeakGuard active. Silently monitoring {VIRTUAL_LOAD_ENTITY}")
+    _LOGGER.info(f"PeakGuard active. Silently monitoring {virtual_load_entity}")
 
     async def handle_run_peak_guard(call: ServiceCall):
-        v_load = call.data.get("virtual_load_entity", VIRTUAL_LOAD_ENTITY)
+        v_load = call.data.get("virtual_load_entity", virtual_load_entity)
         limit = call.data.get("limit_entity", LIMIT_ENTITY)
         await peak_guard.update(v_load, limit)
 

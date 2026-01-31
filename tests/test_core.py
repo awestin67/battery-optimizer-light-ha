@@ -61,7 +61,8 @@ MOCK_CONFIG = {
     "api_key": "12345",
     "soc_sensor": "sensor.soc",
     "grid_sensor": "sensor.grid",
-    "battery_power_sensor": "sensor.bat_power"
+    "battery_power_sensor": "sensor.bat_power",
+    "virtual_load_sensor": "sensor.husets_netto_last_virtuell"
 }
 
 @pytest.fixture
