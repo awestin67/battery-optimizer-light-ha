@@ -132,6 +132,7 @@ class PeakGuard:
             elif self._has_reported and current_load <= safe_limit:
                 _LOGGER.info(f"✅ PEAK CLEARED. Load: {current_load} W. Returning to strategy.")
                 self._set_reported_state(False)
+                await self._report_peak_clear(current_load)
 
             # Steg 2: Agera baserat på tillstånd
             if self._has_reported and soc > 5:
@@ -195,9 +196,23 @@ class PeakGuard:
             async with aiohttp.ClientSession() as session:
                 async with session.post(api_url, json=payload) as resp:
                     if resp.status == 200:
-                        _LOGGER.debug(f"Cloud Report Sent: {payload['grid_power_kw']} kW")
+                        _LOGGER.debug(f"Cloud report sent: PeakGuard Triggered: {payload['grid_power_kw']} kW")
         except Exception as e:
             _LOGGER.error(f"Failed to report peak: {e}")
+
+    async def _report_peak_clear(self, grid_w):
+        try:
+            api_url = f"{self.config[CONF_API_URL].rstrip('/')}/report_peak_clear"
+            payload = {
+                "api_key": self.config[CONF_API_KEY],
+                "grid_power_kw": round(grid_w / 1000.0, 2)
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(api_url, json=payload) as resp:
+                    if resp.status == 200:
+                        _LOGGER.debug(f"Cloud report sent: PeakGuard Cleared: {payload['grid_power_kw']} kW")
+        except Exception as e:
+            _LOGGER.error(f"Failed to report peak clear: {e}")
 
     async def _call_script(self, script_name, data):
         await self.hass.services.async_call("script", script_name, service_data=data)
