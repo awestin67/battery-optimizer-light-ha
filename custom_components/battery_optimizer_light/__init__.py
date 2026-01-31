@@ -136,7 +136,7 @@ class PeakGuard:
             elif self._has_reported and current_load <= safe_limit:
                 _LOGGER.info(f"✅ PEAK CLEARED. Load: {current_load} W. Returning to strategy.")
                 self._set_reported_state(False)
-                await self._report_peak_clear(current_load)
+                await self._report_peak_clear(current_load, limit_w)
 
             # Steg 2: Agera baserat på tillstånd
             if self._has_reported and soc > 5:
@@ -220,12 +220,13 @@ class PeakGuard:
         except Exception as e:
             _LOGGER.error(f"Failed to report peak: {e}")
 
-    async def _report_peak_clear(self, grid_w):
+    async def _report_peak_clear(self, grid_w, limit_w):
         try:
             api_url = f"{self.config[CONF_API_URL].rstrip('/')}/report_peak_clear"
             payload = {
                 "api_key": self.config[CONF_API_KEY],
-                "grid_power_kw": round(grid_w / 1000.0, 2)
+                "grid_power_kw": round(grid_w / 1000.0, 2),
+                "limit_kw": round(limit_w / 1000.0, 2)
             }
             async with aiohttp.ClientSession() as session:
                 async with session.post(api_url, json=payload) as resp:

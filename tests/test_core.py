@@ -97,6 +97,9 @@ async def test_peak_guard_triggers_discharge(mock_hass_instance):
 
     guard = PeakGuard(mock_hass_instance, MOCK_CONFIG, coordinator)
 
+    # Mocka _report_peak för att verifiera argument och undvika nätverksanrop
+    guard._report_peak = AsyncMock()
+
     # Setup av sensorvärden
     # Gräns: 5 kW
     limit_state = MagicMock()
@@ -132,6 +135,9 @@ async def test_peak_guard_triggers_discharge(mock_hass_instance):
         service_data={"power": 2000}
     )
 
+    # Verifiera att _report_peak anropades med (current_load, limit_w)
+    guard._report_peak.assert_called_with(7000.0, 5000.0)
+
 @pytest.mark.asyncio
 async def test_peak_guard_respects_safe_limit(mock_hass_instance):
     """Krav: Om lasten är låg ska vi återgå till molnets plan (eller Auto)."""
@@ -140,6 +146,9 @@ async def test_peak_guard_respects_safe_limit(mock_hass_instance):
 
     guard = PeakGuard(mock_hass_instance, MOCK_CONFIG, coordinator)
     guard._has_reported = True # Låtsas att vi var i ett larm-läge
+
+    # Mocka _report_peak_clear för att verifiera argument
+    guard._report_peak_clear = AsyncMock()
 
     # Gräns: 5 kW, Safe limit blir 4 kW
     limit_state = MagicMock()
@@ -169,6 +178,9 @@ async def test_peak_guard_respects_safe_limit(mock_hass_instance):
         "sonnen_set_auto_mode",
         service_data={}
     )
+
+    # Verifiera att _report_peak_clear anropades med (current_load, limit_w)
+    guard._report_peak_clear.assert_called_with(3000.0, 5000.0)
 
 @pytest.mark.asyncio
 async def test_peak_guard_disabled_by_backend(mock_hass_instance):
