@@ -10,6 +10,8 @@ from .const import (
     CONF_BATTERY_POWER_SENSOR,
     CONF_API_URL,
     CONF_API_KEY,
+    CONF_GRID_SENSOR,
+    CONF_GRID_SENSOR_INVERT,
     CONF_VIRTUAL_LOAD_SENSOR,
 )
 
@@ -32,8 +34,8 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     peak_guard = PeakGuard(hass, config, coordinator)
     coordinator.peak_guard = peak_guard
 
-    # Hämta virtuell last-sensor från config, fallback till gammal default om den saknas
-    virtual_load_entity = config.get(CONF_VIRTUAL_LOAD_SENSOR, "sensor.husets_netto_last_virtuell")
+    # Hämta virtuell last-sensor från config (kan vara None)
+    virtual_load_entity = config.get(CONF_VIRTUAL_LOAD_SENSOR)
 
     # --- BAKGRUNDSBEVAKNING ---
     async def on_load_change(event):
@@ -41,11 +43,19 @@ async def async_setup_entry(hass: HomeAssistant, entry):
         if hass.state == CoreState.running:
             await peak_guard.update(virtual_load_entity, LIMIT_ENTITY)
 
-    entry.async_on_unload(
-        async_track_state_change_event(hass, [virtual_load_entity], on_load_change)
-    )
-
-    _LOGGER.info(f"PeakGuard active. Silently monitoring {virtual_load_entity}")
+    if virtual_load_entity:
+        entry.async_on_unload(
+            async_track_state_change_event(hass, [virtual_load_entity], on_load_change)
+        )
+        _LOGGER.info(f"PeakGuard active. Silently monitoring {virtual_load_entity}")
+    else:
+        # Om ingen virtuell sensor valts, bevaka Grid och Batteri för automatisk beräkning
+        grid_entity = config.get(CONF_GRID_SENSOR)
+        bat_entity = config.get(CONF_BATTERY_POWER_SENSOR)
+        entry.async_on_unload(
+            async_track_state_change_event(hass, [grid_entity, bat_entity], on_load_change)
+        )
+        _LOGGER.info(f"PeakGuard active. Calculating virtual load from {grid_entity} + {bat_entity}")
 
     async def handle_run_peak_guard(call: ServiceCall):
         v_load = call.data.get("virtual_load_entity", virtual_load_entity)
@@ -111,10 +121,36 @@ class PeakGuard:
             limit_w = raw_limit * 1000 if raw_limit < 100 else raw_limit
 
             # 2. Hämta Lasten
-            load_state = self.hass.states.get(virtual_load_id)
-            if not load_state or load_state.state in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
-                return
-            current_load = float(load_state.state)
+            current_load = 0.0
+            if virtual_load_id:
+                # Använd manuellt vald sensor
+                load_state = self.hass.states.get(virtual_load_id)
+                if not load_state or load_state.state in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
+                    return
+                current_load = float(load_state.state)
+            else:
+                # Beräkna automatiskt: Grid + Batteri
+                grid_id = self.config.get(CONF_GRID_SENSOR)
+                bat_id = self.config.get(CONF_BATTERY_POWER_SENSOR)
+
+                grid_state = self.hass.states.get(grid_id)
+                bat_state = self.hass.states.get(bat_id)
+
+                grid_val = (
+                    float(grid_state.state)
+                    if grid_state and grid_state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE]
+                    else 0.0
+                )
+                bat_val = (
+                    float(bat_state.state)
+                    if bat_state and bat_state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE]
+                    else 0.0
+                )
+
+                if self.config.get(CONF_GRID_SENSOR_INVERT, False):
+                    grid_val = -grid_val
+
+                current_load = grid_val + bat_val
 
             # --- TYST FILTER ---
             wake_up_threshold = limit_w * 0.90

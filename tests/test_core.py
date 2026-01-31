@@ -42,8 +42,8 @@ mock_sensor = MagicMock()
 class MockSensorEntity:
     pass
 mock_sensor.SensorEntity = MockSensorEntity
-mock_sensor.SensorDeviceClass = MagicMock
-mock_sensor.SensorStateClass = MagicMock
+mock_sensor.SensorDeviceClass = MagicMock()
+mock_sensor.SensorStateClass = MagicMock()
 sys.modules["homeassistant.components.sensor"] = mock_sensor
 
 # Lägg till rotmappen i sökvägen så vi kan importera komponenten
@@ -53,7 +53,7 @@ import pytest  # noqa: E402
 from unittest.mock import AsyncMock, patch  # noqa: E402
 from custom_components.battery_optimizer_light.coordinator import BatteryOptimizerLightCoordinator  # noqa: E402
 from custom_components.battery_optimizer_light import PeakGuard  # noqa: E402
-from custom_components.battery_optimizer_light.sensor import BatteryLightStatusSensor  # noqa: E402
+from custom_components.battery_optimizer_light.sensor import BatteryLightStatusSensor, BatteryLightVirtualLoadSensor  # noqa: E402
 
 # --- MOCK DATA ---
 MOCK_CONFIG = {
@@ -62,7 +62,7 @@ MOCK_CONFIG = {
     "soc_sensor": "sensor.soc",
     "grid_sensor": "sensor.grid",
     "battery_power_sensor": "sensor.bat_power",
-    "virtual_load_sensor": "sensor.husets_netto_last_virtuell"
+    "virtual_load_sensor": "sensor.husets_netto_last_virtuell",
 }
 
 @pytest.fixture
@@ -360,5 +360,87 @@ async def test_coordinator_sends_solar_override_flag(mock_hass_instance):
         _, kwargs = mock_session.post.call_args
         payload = kwargs['json']
 
+
         assert payload["is_solar_override"] is True
         assert payload["soc"] == 50.0
+
+@pytest.mark.asyncio
+async def test_peak_guard_calculates_load_with_inverted_grid(mock_hass_instance):
+    """Krav: Om grid_sensor_invert är True ska grid-värdet negeras vid beräkning."""
+    # Konfiguration med inverterad grid sensor och INGEN virtuell sensor
+    config = MOCK_CONFIG.copy()
+    config["grid_sensor_invert"] = True
+    config["virtual_load_sensor"] = None
+
+    coordinator = MagicMock()
+    coordinator.data = {"action": "HOLD"}
+
+    guard = PeakGuard(mock_hass_instance, config, coordinator)
+
+    # Setup sensorer
+    limit_state = MagicMock()
+    limit_state.state = "5.0"
+
+    # Grid: 5000 W (Positivt). Med invert=True betyder detta Export (-5000 W).
+    grid_state = MagicMock()
+    grid_state.state = "5000"
+
+    # Batteri: 0 W
+    bat_state = MagicMock()
+    bat_state.state = "0"
+
+    def get_state_side_effect(entity_id):
+        if entity_id == "sensor.optimizer_light_peak_limit":
+            return limit_state
+        if entity_id == "sensor.grid":
+            return grid_state
+        if entity_id == "sensor.bat_power":
+            return bat_state
+        return None
+    mock_hass_instance.states.get.side_effect = get_state_side_effect
+
+    # Kör update utan virtuell sensor-ID
+    await guard.update(None, "sensor.optimizer_light_peak_limit")
+
+    # Om inverteringen fungerade är lasten -5000. -5000 < -200 -> Solar Override.
+    assert guard.is_solar_override is True
+
+def test_virtual_load_sensor_calculation():
+    """Testar att den virtuella lastsensorn räknar rätt."""
+    coordinator = MagicMock()
+    coordinator.api_key = "12345"
+    coordinator.hass = MagicMock()
+
+    # Mocka config via peak_guard
+    peak_guard = MagicMock()
+    peak_guard.config = {
+        "grid_sensor": "sensor.grid",
+        "battery_power_sensor": "sensor.bat",
+        "grid_sensor_invert": False,
+        "virtual_load_sensor": None
+    }
+    coordinator.peak_guard = peak_guard
+
+    sensor = BatteryLightVirtualLoadSensor(coordinator)
+
+    # Mocka states
+    grid_state = MagicMock()
+    grid_state.state = "5000"
+    bat_state = MagicMock()
+    bat_state.state = "1000"
+
+    def get_state_side_effect(entity_id):
+        if entity_id == "sensor.grid":
+            return grid_state
+        if entity_id == "sensor.bat":
+            return bat_state
+        return None
+    coordinator.hass.states.get.side_effect = get_state_side_effect
+
+    # Fall 1: Normal beräkning (5000 + 1000 = 6000)
+    assert sensor.state == 6000
+
+    # Fall 2: Inverterad grid
+    peak_guard.config["grid_sensor_invert"] = True
+    # (-5000 + 1000 = -4000)
+    assert sensor.state == -4000

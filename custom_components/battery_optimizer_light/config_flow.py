@@ -9,6 +9,7 @@ from .const import (
     CONF_API_KEY,
     CONF_SOC_SENSOR,
     CONF_GRID_SENSOR,
+    CONF_GRID_SENSOR_INVERT,
     CONF_BATTERY_POWER_SENSOR,
     CONF_VIRTUAL_LOAD_SENSOR,
 )
@@ -29,10 +30,11 @@ class BatteryOptimizerLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_GRID_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
+            vol.Optional(CONF_GRID_SENSOR_INVERT, default=False): bool,
             vol.Required(CONF_BATTERY_POWER_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
-            vol.Required(CONF_VIRTUAL_LOAD_SENSOR): EntitySelector(
+            vol.Optional(CONF_VIRTUAL_LOAD_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
         })
@@ -74,10 +76,11 @@ class BatteryOptimizerLightOptionsFlow(config_entries.OptionsFlow):
             vol.Required(CONF_GRID_SENSOR, default=data.get(CONF_GRID_SENSOR)): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
+            vol.Optional(CONF_GRID_SENSOR_INVERT, default=data.get(CONF_GRID_SENSOR_INVERT, False)): bool,
             vol.Required(CONF_BATTERY_POWER_SENSOR, default=data.get(CONF_BATTERY_POWER_SENSOR)): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
-            vol.Required(CONF_VIRTUAL_LOAD_SENSOR, default=data.get(CONF_VIRTUAL_LOAD_SENSOR)): EntitySelector(
+            vol.Optional(CONF_VIRTUAL_LOAD_SENSOR, default=data.get(CONF_VIRTUAL_LOAD_SENSOR)): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
         })

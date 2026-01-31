@@ -8,6 +8,7 @@ CONF_API_URL = "api_url"
 # Sensorer
 CONF_SOC_SENSOR = "soc_sensor"
 CONF_GRID_SENSOR = "grid_sensor"    # Mätare för husets totala förbrukning (Watt)
+CONF_GRID_SENSOR_INVERT = "grid_sensor_invert" # Om mätaren visar positivt vid export
 CONF_BATTERY_POWER_SENSOR = "battery_power_sensor" # Batteriets nuvarande effekt (Watt)
 CONF_VIRTUAL_LOAD_SENSOR = "virtual_load_sensor" # Virtuell last (Husets netto utan batteri)
 

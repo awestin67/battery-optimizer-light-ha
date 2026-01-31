@@ -4,7 +4,14 @@ from homeassistant.components.sensor import ( # type: ignore
     SensorStateClass,
 )
 from homeassistant.helpers.update_coordinator import CoordinatorEntity # type: ignore
-from .const import DOMAIN
+from homeassistant.const import STATE_UNKNOWN, STATE_UNAVAILABLE # type: ignore
+from .const import (
+    DOMAIN,
+    CONF_GRID_SENSOR,
+    CONF_BATTERY_POWER_SENSOR,
+    CONF_VIRTUAL_LOAD_SENSOR,
+    CONF_GRID_SENSOR_INVERT,
+)
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
@@ -15,7 +22,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         BatteryLightReasonSensor(coordinator),
         BatteryLightBufferSensor(coordinator),
         BatteryLightPeakSensor(coordinator),
-        BatteryLightStatusSensor(coordinator)
+        BatteryLightStatusSensor(coordinator),
+        BatteryLightVirtualLoadSensor(coordinator)
     ])
 
 class BatteryLightActionSensor(CoordinatorEntity, SensorEntity):
@@ -128,3 +136,64 @@ class BatteryLightStatusSensor(CoordinatorEntity, SensorEntity):
         if status == "Triggered":
             return "mdi:shield-alert"
         return "mdi:shield-search"
+
+class BatteryLightVirtualLoadSensor(SensorEntity):
+    """Sensor som visar den beräknade virtuella lasten (för verifiering)."""
+    def __init__(self, coordinator):
+        # Vi ärver inte från CoordinatorEntity eftersom vi vill polla oftare (default 30s)
+        # eller bara visa beräknat värde, oberoende av moln-uppdateringar.
+        self.coordinator = coordinator
+        self._attr_name = "Optimizer Light Virtual Load"
+        self._attr_unique_id = f"{coordinator.api_key}_virtual_load"
+        self._attr_unit_of_measurement = "W"
+        self._attr_device_class = SensorDeviceClass.POWER
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:home-lightning-bolt-outline"
+
+    @property
+    def state(self):
+        if not hasattr(self.coordinator, "peak_guard"):
+            return None
+
+        config = self.coordinator.peak_guard.config
+        hass = self.coordinator.hass
+
+        # 1. Om en specifik sensor är vald, visa dess värde
+        virtual_load_id = config.get(CONF_VIRTUAL_LOAD_SENSOR)
+        if virtual_load_id:
+            state = hass.states.get(virtual_load_id)
+            if state and state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
+                try:
+                    return float(state.state)
+                except ValueError:
+                    pass
+            return None
+
+        # 2. Annars beräkna: Grid + Batteri
+        grid_id = config.get(CONF_GRID_SENSOR)
+        bat_id = config.get(CONF_BATTERY_POWER_SENSOR)
+        invert_grid = config.get(CONF_GRID_SENSOR_INVERT, False)
+
+        grid_val = 0.0
+        bat_val = 0.0
+
+        if grid_id:
+            state = hass.states.get(grid_id)
+            if state and state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
+                try:
+                    grid_val = float(state.state)
+                except ValueError:
+                    pass
+
+        if bat_id:
+            state = hass.states.get(bat_id)
+            if state and state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
+                try:
+                    bat_val = float(state.state)
+                except ValueError:
+                    pass
+
+        if invert_grid:
+            grid_val = -grid_val
+
+        return int(grid_val + bat_val)

@@ -33,21 +33,11 @@ För att systemet ska kunna styra ditt batteri (t.ex. ett Sonnen) måste du ha d
 Du behöver veta namnet på följande sensorer i din Home Assistant:
 * **Batteri SoC:** (t.ex. `sensor.sonnen_usoc`)
 * **Batteri Effekt:** (t.ex. `sensor.sonnen_battery_power_w`) – Används i automationen.
-* **Virtuell Nätsensor:** Mäter husets totala in/utmatning i Watt exklusive batteriet.
-Du väljer denna sensor när du konfigurerar integrationen. Om du inte har en sådan sensor färdig, kan du skapa en i `configuration.yaml` (eller `template.yaml`):
-```yaml
-template:
-  - sensor:
-      - name: "Husets Netto Last Virtuell"
-        unique_id: house_net_load_virtual
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        state: >
-          {% set cons = states('sensor.sonnen_consumption_w') | float(0) %}
-          {% set prod = states('sensor.sonnen_production_w') | float(0) %}          
-          {{ (cons - prod) | int }}
-```
+* **Grid Sensor:** Mäter husets totala in/utmatning (Import/Export).
+
+**Virtuell Last:** Integrationen räknar automatiskt ut husets nettolast (`Grid + Batteri`).
+*Om du saknar en Grid-sensor kan du skapa en egen template-sensor (`Konsumtion - Produktion`) och välja den under "Virtuell Last Sensor" i inställningarna.*
+
 ---
 
 ## 🚀 Installation
@@ -74,8 +64,9 @@ template:
     * **API Key:** Din nyckel från Web Dashboarden.
     * **SoC Sensor:** Välj din batterisensor (%).
     * **Grid Sensor:** Välj sensorn som mäter husets huvudsäkring/nät (W).
+    * **Invertera Grid Sensor:** Kryssa i om din mätare visar positivt värde vid export (försäljning).
     * **Battery Power Sensor:** Välj sensorn som mäter batteriets effekt (W).
-    * **Virtual Load Sensor:** Välj sensorn som visar husets nettolast (utan batteri).
+    * **Virtual Load Sensor:** (Valfritt) Lämna tomt för automatisk beräkning.
 
 ---
 
