@@ -54,7 +54,6 @@ from unittest.mock import AsyncMock  # noqa: E402
 from custom_components.battery_optimizer_light.coordinator import BatteryOptimizerLightCoordinator  # noqa: E402
 from custom_components.battery_optimizer_light import PeakGuard  # noqa: E402
 from custom_components.battery_optimizer_light.sensor import BatteryLightStatusSensor  # noqa: E402
-from homeassistant.helpers.update_coordinator import UpdateFailed  # noqa: E402
 
 # --- MOCK DATA ---
 MOCK_CONFIG = {

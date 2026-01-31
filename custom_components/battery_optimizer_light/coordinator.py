@@ -1,7 +1,7 @@
 import logging
 import aiohttp
 from datetime import timedelta
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # type: ignore
 
 _LOGGER = logging.getLogger(__name__)
 

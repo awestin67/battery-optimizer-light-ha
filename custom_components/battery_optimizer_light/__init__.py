@@ -1,8 +1,8 @@
 import logging
 import aiohttp
-from homeassistant.core import HomeAssistant, ServiceCall, CoreState
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.core import HomeAssistant, ServiceCall, CoreState # type: ignore
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN # type: ignore
+from homeassistant.helpers.event import async_track_state_change_event # type: ignore
 from .coordinator import BatteryOptimizerLightCoordinator
 from .const import (
     DOMAIN,
