@@ -31,4 +31,4 @@ CONF_BATTERY_STATUS_KEYWORDS = "battery_status_keywords" # Nyckelord för underh
 CONF_VIRTUAL_LOAD_SENSOR = "virtual_load_sensor" # Virtuell last (Husets netto utan batteri)
 
 DEFAULT_API_URL = "https://battery-light-development.up.railway.app"
-DEFAULT_BATTERY_STATUS_KEYWORDS = "battery_care, pulsing orange, calibration, firmware_update, solid_red"
+DEFAULT_BATTERY_STATUS_KEYWORDS = "battery_care, puls_orange, calibration, firmware_update, solid_red, warning_internet"

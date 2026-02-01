@@ -166,7 +166,11 @@ class PeakGuard:
                     return
 
                 # Hämta nyckelord från config (eller använd default)
-                keywords_str = self.config.get(CONF_BATTERY_STATUS_KEYWORDS, DEFAULT_BATTERY_STATUS_KEYWORDS)
+                keywords_str = self.config.get(CONF_BATTERY_STATUS_KEYWORDS)
+                # Fallback om konfigurationen är tom eller saknas
+                if not keywords_str or not str(keywords_str).strip():
+                    keywords_str = DEFAULT_BATTERY_STATUS_KEYWORDS
+
                 keywords = [k.strip().lower() for k in keywords_str.split(",") if k.strip()]
 
                 val_display = str(status_state.state)
@@ -176,6 +180,10 @@ class PeakGuard:
                     return
 
                 val_lower = val_display.lower()
+
+                # Debug-loggning för att spåra matchningen
+                _LOGGER.debug(f"Maintenance check: Status='{val_lower}' Keywords={keywords}")
+
                 if any(k in val_lower for k in keywords):
                     if not self._in_maintenance:
                         _LOGGER.info(f"🔋 Maintenance mode detected ({val_display}). Pausing control.")
