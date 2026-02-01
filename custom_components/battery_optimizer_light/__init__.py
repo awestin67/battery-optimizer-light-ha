@@ -165,6 +165,11 @@ class PeakGuard:
                     keywords = [k.strip().lower() for k in keywords_str.split(",") if k.strip()]
 
                     val_display = str(status_state.state)
+
+                    # Ignorera tomma värden för att undvika fladder
+                    if not val_display or not val_display.strip():
+                        return
+
                     val_lower = val_display.lower()
                     if any(k in val_lower for k in keywords):
                         if not self._in_maintenance:
@@ -177,7 +182,7 @@ class PeakGuard:
                             self._set_reported_state(False)
                         return
                     elif self._in_maintenance:
-                        _LOGGER.info("🔋 Maintenance mode ended. Resuming control.")
+                        _LOGGER.info(f"🔋 Maintenance mode ended. Status is '{val_display}'. Resuming control.")
                         self._in_maintenance = False
                         self._maintenance_reason = None
 
