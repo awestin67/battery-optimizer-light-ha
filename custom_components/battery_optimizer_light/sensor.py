@@ -136,8 +136,17 @@ class BatteryLightStatusSensor(CoordinatorEntity, SensorEntity):
         is_active = data.get("is_peak_shaving_active", True)
 
         is_triggered = False
+        in_maintenance = False
+        maintenance_reason = None
+
         if hasattr(self.coordinator, "peak_guard"):
-            is_triggered = self.coordinator.peak_guard.is_active
+            pg = self.coordinator.peak_guard
+            is_triggered = pg.is_active
+            in_maintenance = pg.in_maintenance
+            maintenance_reason = pg.maintenance_reason
+
+        if in_maintenance:
+            return f"Maintenance mode detected ({maintenance_reason}). Pausing control."
 
         if not is_active:
             return "Disabled"
@@ -151,6 +160,8 @@ class BatteryLightStatusSensor(CoordinatorEntity, SensorEntity):
             return "mdi:shield-off"
         if status == "Triggered":
             return "mdi:shield-alert"
+        if "Maintenance" in status:
+            return "mdi:tools"
         return "mdi:shield-search"
 
 class BatteryLightVirtualLoadSensor(SensorEntity):

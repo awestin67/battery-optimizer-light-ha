@@ -240,6 +240,8 @@ def test_status_sensor():
     # Mocka peak_guard på coordinatorn
     peak_guard = MagicMock()
     peak_guard.is_active = False
+    peak_guard.in_maintenance = False
+    peak_guard.maintenance_reason = None
     coordinator.peak_guard = peak_guard
 
     sensor = BatteryLightStatusSensor(coordinator)
@@ -257,6 +259,14 @@ def test_status_sensor():
     coordinator.data = {"is_peak_shaving_active": False}
     assert sensor.state == "Disabled"
     assert sensor.icon == "mdi:shield-off"
+
+    # Fall 4: Maintenance
+    coordinator.data = {"is_peak_shaving_active": True}
+    peak_guard.is_active = False
+    peak_guard.in_maintenance = True
+    peak_guard.maintenance_reason = "Service Mode"
+    assert sensor.state == "Maintenance mode detected (Service Mode). Pausing control."
+    assert sensor.icon == "mdi:tools"
 
 @pytest.mark.asyncio
 async def test_peak_guard_reports_failure_on_overload(mock_hass_instance):
