@@ -62,19 +62,33 @@ async def async_setup_entry(hass: HomeAssistant, entry):
         if hass.state == CoreState.running:
             await peak_guard.update(virtual_load_entity, LIMIT_ENTITY)
 
+    # Samla alla sensorer vi ska lyssna på
+    entities_to_track = []
+
+    # 1. Last-sensorer
     if virtual_load_entity:
-        entry.async_on_unload(
-            async_track_state_change_event(hass, [virtual_load_entity], on_load_change)
-        )
-        _LOGGER.info(f"PeakGuard active. Silently monitoring {virtual_load_entity}")
+        entities_to_track.append(virtual_load_entity)
+        _LOGGER.info(f"PeakGuard monitoring virtual load: {virtual_load_entity}")
     else:
-        # Om ingen virtuell sensor valts, bevaka Grid och Batteri för automatisk beräkning
         grid_entity = config.get(CONF_GRID_SENSOR)
         bat_entity = config.get(CONF_BATTERY_POWER_SENSOR)
+        if grid_entity:
+            entities_to_track.append(grid_entity)
+        if bat_entity:
+            entities_to_track.append(bat_entity)
+        _LOGGER.info(f"PeakGuard calculating load from: {grid_entity} + {bat_entity}")
+
+    # 2. Status-sensor (för Maintenance)
+    status_entity = config.get(CONF_BATTERY_STATUS_SENSOR)
+    if status_entity:
+        entities_to_track.append(status_entity)
+        _LOGGER.info(f"PeakGuard monitoring battery status: {status_entity}")
+
+    # Starta bevakning
+    if entities_to_track:
         entry.async_on_unload(
-            async_track_state_change_event(hass, [grid_entity, bat_entity], on_load_change)
+            async_track_state_change_event(hass, entities_to_track, on_load_change)
         )
-        _LOGGER.info(f"PeakGuard active. Calculating virtual load from {grid_entity} + {bat_entity}")
 
     async def handle_run_peak_guard(call: ServiceCall):
         v_load = call.data.get("virtual_load_entity", virtual_load_entity)
