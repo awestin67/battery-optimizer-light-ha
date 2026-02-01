@@ -159,32 +159,37 @@ class PeakGuard:
             status_entity = self.config.get(CONF_BATTERY_STATUS_SENSOR)
             if status_entity:
                 status_state = self.hass.states.get(status_entity)
-                if status_state and status_state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
-                    # Hämta nyckelord från config (eller använd default)
-                    keywords_str = self.config.get(CONF_BATTERY_STATUS_KEYWORDS, DEFAULT_BATTERY_STATUS_KEYWORDS)
-                    keywords = [k.strip().lower() for k in keywords_str.split(",") if k.strip()]
 
-                    val_display = str(status_state.state)
+                # SÄKERHET: Om sensorn inte är redo (t.ex. vid uppstart), avvakta med beslut.
+                if not status_state or status_state.state in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
+                    _LOGGER.debug(f"Status sensor {status_entity} is unavailable/unknown. Skipping update.")
+                    return
 
-                    # Ignorera tomma värden för att undvika fladder
-                    if not val_display or not val_display.strip():
-                        return
+                # Hämta nyckelord från config (eller använd default)
+                keywords_str = self.config.get(CONF_BATTERY_STATUS_KEYWORDS, DEFAULT_BATTERY_STATUS_KEYWORDS)
+                keywords = [k.strip().lower() for k in keywords_str.split(",") if k.strip()]
 
-                    val_lower = val_display.lower()
-                    if any(k in val_lower for k in keywords):
-                        if not self._in_maintenance:
-                            _LOGGER.info(f"🔋 Maintenance mode detected ({val_display}). Pausing control.")
-                            self._in_maintenance = True
+                val_display = str(status_state.state)
 
-                        self._maintenance_reason = val_display
+                # Ignorera tomma värden för att undvika fladder
+                if not val_display or not val_display.strip():
+                    return
 
-                        if self.is_active:
-                            self._set_reported_state(False)
-                        return
-                    elif self._in_maintenance:
-                        _LOGGER.info(f"🔋 Maintenance mode ended. Status is '{val_display}'. Resuming control.")
-                        self._in_maintenance = False
-                        self._maintenance_reason = None
+                val_lower = val_display.lower()
+                if any(k in val_lower for k in keywords):
+                    if not self._in_maintenance:
+                        _LOGGER.info(f"🔋 Maintenance mode detected ({val_display}). Pausing control.")
+                        self._in_maintenance = True
+
+                    self._maintenance_reason = val_display
+
+                    if self.is_active:
+                        self._set_reported_state(False)
+                    return
+                elif self._in_maintenance:
+                    _LOGGER.info(f"🔋 Maintenance mode ended. Status is '{val_display}'. Resuming control.")
+                    self._in_maintenance = False
+                    self._maintenance_reason = None
 
             # 1. Hämta Gränsvärdet
             limit_state = self.hass.states.get(limit_id)
