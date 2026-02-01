@@ -2,6 +2,7 @@
 
 ![Validate and Test](https://github.com/awestin67/battery-optimizer-light-ha/actions/workflows/run_tests.yml/badge.svg)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 **Battery Optimizer Light** är en hybrid-lösning som kopplar din Home Assistant till en smart molntjänst för Sonnen-batterier.
 

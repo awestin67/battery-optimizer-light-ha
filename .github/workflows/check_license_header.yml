@@ -1,0 +1,33 @@
+name: Check License Header
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check-headers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Verify License Headers
+        shell: bash
+        run: |
+          EXIT_CODE=0
+          # Hitta alla .py-filer, ignorera .venv och __pycache__
+          FILES=$(find . -type f -name "*.py" -not -path "*/.venv/*" -not -path "*/__pycache__/*")
+          
+          EXPECTED="Copyright (C) 2026 @awestin67"
+          
+          for FILE in $FILES; do
+            if ! grep -Fq "$EXPECTED" "$FILE"; then
+              echo "❌ Saknar licens-header: $FILE"
+              EXIT_CODE=1
+            fi
+          done
+          
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "✅ Alla Python-filer har licens-header."
+          else
+            exit 1
+          fi
