@@ -30,6 +30,10 @@ sys.modules["homeassistant.helpers.event"] = mock_hass
 sys.modules["homeassistant.exceptions"] = mock_hass
 sys.modules["homeassistant.components"] = mock_hass
 
+mock_util = MagicMock()
+sys.modules["homeassistant.util"] = mock_util
+sys.modules["homeassistant.util.dt"] = mock_util
+
 mock_const = MagicMock()
 mock_const.STATE_UNAVAILABLE = "unavailable"
 mock_const.STATE_UNKNOWN = "unknown"

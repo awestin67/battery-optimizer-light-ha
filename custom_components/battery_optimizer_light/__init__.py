@@ -16,6 +16,8 @@
 
 import logging
 import aiohttp
+from datetime import timedelta
+import homeassistant.util.dt as dt_util
 from homeassistant.core import HomeAssistant, ServiceCall, CoreState # type: ignore
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN # type: ignore
 from homeassistant.helpers.event import async_track_state_change_event # type: ignore
@@ -115,6 +117,7 @@ class PeakGuard:
         self._is_solar_override = False  # Flagga för sol-override
         self._in_maintenance = False  # Flagga för underhållsläge
         self._maintenance_reason = None  # Orsak till underhållsläge
+        self._maintenance_cooldown_start = None # Tidsstämpel för när underhållssignalen försvann
 
     @property
     def is_active(self):
@@ -185,9 +188,11 @@ class PeakGuard:
                 _LOGGER.debug(f"Maintenance check: Status='{val_lower}' Keywords={keywords}")
 
                 if any(k in val_lower for k in keywords):
+                    self._maintenance_cooldown_start = None # Återställ cooldown om vi ser signalen igen
                     if not self._in_maintenance:
                         _LOGGER.info(f"🔋 Maintenance mode detected ({val_display}). Pausing control.")
                         self._in_maintenance = True
+                        self.coordinator.async_update_listeners()
 
                     self._maintenance_reason = val_display
 
@@ -195,9 +200,20 @@ class PeakGuard:
                         self._set_reported_state(False)
                     return
                 elif self._in_maintenance:
+                    # Signalen är borta, men vi väntar lite (debounce) för att undvika fladder
+                    if self._maintenance_cooldown_start is None:
+                        self._maintenance_cooldown_start = dt_util.utcnow()
+                        _LOGGER.debug(f"Maintenance signal lost (Status: {val_display}). Starting 60s cooldown.")
+                        return
+
+                    if dt_util.utcnow() - self._maintenance_cooldown_start < timedelta(seconds=60):
+                        return
+
                     _LOGGER.info(f"🔋 Maintenance mode ended. Status is '{val_display}'. Resuming control.")
                     self._in_maintenance = False
                     self._maintenance_reason = None
+                    self._maintenance_cooldown_start = None
+                    self.coordinator.async_update_listeners()
 
             # 1. Hämta Gränsvärdet
             limit_state = self.hass.states.get(limit_id)
