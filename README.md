@@ -67,7 +67,23 @@ Du behöver veta namnet på följande sensorer i din Home Assistant:
     * **Grid Sensor:** Välj sensorn som mäter husets huvudsäkring/nät (W).
     * **Invertera Grid Sensor:** Kryssa i om din mätare visar positivt värde vid export (försäljning).
     * **Battery Power Sensor:** Välj sensorn som mäter batteriets effekt (W).
+    * **Battery Status Sensor:** (Valfritt) Välj sensorn som visar driftläge.
+    * **Maintenance Keywords:** (Valfritt) Kommaseparerad lista med ord som pausar styrningen (t.ex. `battery_care, error`).
     * **Virtual Load Sensor:** (Valfritt) Lämna tomt för automatisk beräkning.
+
+### 💡 Tips: Detektera Underhåll (Battery Care)
+För att systemet ska pausa automatiskt när batteriet kalibreras (Battery Care) eller tappar internet, skapa en sensor som läser `Eclipse Status`.
+Exempel för `configuration.yaml` (om du använder `/api/v2/latestdata`):
+```yaml
+sensor:
+  - platform: rest
+    name: "Sonnen Eclipse Status"
+    resource: "http://<DIN_BATTERI_IP>/api/v2/latestdata"
+    headers:
+      Auth-Token: "DIN_AUTH_TOKEN"
+    value_template: "{{ value_json['ic_status']['Eclipse Led']['Eclipse Status'] }}"
+    scan_interval: 60
+```
 
 ---
 

@@ -28,7 +28,10 @@ from .const import (
     CONF_API_KEY,
     CONF_GRID_SENSOR,
     CONF_GRID_SENSOR_INVERT,
+    CONF_BATTERY_STATUS_SENSOR,
+    CONF_BATTERY_STATUS_KEYWORDS,
     CONF_VIRTUAL_LOAD_SENSOR,
+    DEFAULT_BATTERY_STATUS_KEYWORDS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -96,6 +99,7 @@ class PeakGuard:
         self._hold_command_sent = False  # Flagga för att undvika upprepade kommandon
         self._capacity_exceeded_logged = False  # Flagga för att logga överlast en gång
         self._is_solar_override = False  # Flagga för sol-override
+        self._in_maintenance = False  # Flagga för underhållsläge
 
     @property
     def is_active(self):
@@ -127,6 +131,28 @@ class PeakGuard:
                 if self.is_active:
                     self._set_reported_state(False)
                 return
+
+            # 0.1 Kontrollera Batteristatus (Maintenance/Full Charge)
+            status_entity = self.config.get(CONF_BATTERY_STATUS_SENSOR)
+            if status_entity:
+                status_state = self.hass.states.get(status_entity)
+                if status_state and status_state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
+                    # Hämta nyckelord från config (eller använd default)
+                    keywords_str = self.config.get(CONF_BATTERY_STATUS_KEYWORDS, DEFAULT_BATTERY_STATUS_KEYWORDS)
+                    keywords = [k.strip().lower() for k in keywords_str.split(",") if k.strip()]
+
+                    val = str(status_state.state).lower()
+                    if any(k in val for k in keywords):
+                        if not self._in_maintenance:
+                            _LOGGER.info(f"🔋 Maintenance mode detected ({val}). Pausing control.")
+                            self._in_maintenance = True
+
+                        if self.is_active:
+                            self._set_reported_state(False)
+                        return
+                    elif self._in_maintenance:
+                        _LOGGER.info("🔋 Maintenance mode ended. Resuming control.")
+                        self._in_maintenance = False
 
             # 1. Hämta Gränsvärdet
             limit_state = self.hass.states.get(limit_id)

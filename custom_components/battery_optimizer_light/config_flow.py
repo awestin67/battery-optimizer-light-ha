@@ -27,7 +27,10 @@ from .const import (
     CONF_GRID_SENSOR,
     CONF_GRID_SENSOR_INVERT,
     CONF_BATTERY_POWER_SENSOR,
+    CONF_BATTERY_STATUS_SENSOR,
+    CONF_BATTERY_STATUS_KEYWORDS,
     CONF_VIRTUAL_LOAD_SENSOR,
+    DEFAULT_BATTERY_STATUS_KEYWORDS,
 )
 
 class BatteryOptimizerLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -50,6 +53,10 @@ class BatteryOptimizerLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_BATTERY_POWER_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
+            vol.Optional(CONF_BATTERY_STATUS_SENSOR): EntitySelector(
+                EntitySelectorConfig(domain="sensor")
+            ),
+            vol.Optional(CONF_BATTERY_STATUS_KEYWORDS, default=DEFAULT_BATTERY_STATUS_KEYWORDS): str,
             vol.Optional(CONF_VIRTUAL_LOAD_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
@@ -96,6 +103,12 @@ class BatteryOptimizerLightOptionsFlow(config_entries.OptionsFlow):
             vol.Required(CONF_BATTERY_POWER_SENSOR, default=data.get(CONF_BATTERY_POWER_SENSOR)): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
+            vol.Optional(CONF_BATTERY_STATUS_SENSOR, default=data.get(CONF_BATTERY_STATUS_SENSOR)): EntitySelector(
+                EntitySelectorConfig(domain="sensor")
+            ),
+            vol.Optional(CONF_BATTERY_STATUS_KEYWORDS, default=data.get(
+                CONF_BATTERY_STATUS_KEYWORDS, DEFAULT_BATTERY_STATUS_KEYWORDS
+            )): str,
             vol.Optional(CONF_VIRTUAL_LOAD_SENSOR, default=data.get(CONF_VIRTUAL_LOAD_SENSOR)): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),

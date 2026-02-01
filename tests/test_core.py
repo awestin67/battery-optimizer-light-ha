@@ -460,3 +460,38 @@ def test_virtual_load_sensor_calculation():
     peak_guard.config["grid_sensor_invert"] = True
     # (-5000 + 1000 = -4000)
     assert sensor.state == -4000
+
+@pytest.mark.asyncio
+async def test_peak_guard_pauses_on_custom_keyword(mock_hass_instance):
+    """Krav: Användaren ska kunna konfigurera egna nyckelord för underhåll."""
+    config = MOCK_CONFIG.copy()
+    config["battery_status_sensor"] = "sensor.generic_battery_status"
+    # Konfigurera ett eget nyckelord
+    config["battery_status_keywords"] = "service mode, critical error"
+
+    coordinator = MagicMock()
+    coordinator.data = {"action": "HOLD"}
+
+    guard = PeakGuard(mock_hass_instance, config, coordinator)
+
+    # Setup sensorer
+    limit_state = MagicMock()
+    limit_state.state = "5.0"
+
+    # Status: "Service Mode" (matchar vårt egna nyckelord)
+    status_state = MagicMock()
+    status_state.state = "System is in Service Mode"
+
+    def get_state_side_effect(entity_id):
+        if entity_id == "sensor.optimizer_light_peak_limit":
+            return limit_state
+        if entity_id == "sensor.generic_battery_status":
+            return status_state
+        return None
+    mock_hass_instance.states.get.side_effect = get_state_side_effect
+
+    # Kör update
+    await guard.update(None, "sensor.optimizer_light_peak_limit")
+
+    # Verifiera att flaggan sattes
+    assert guard._in_maintenance is True
