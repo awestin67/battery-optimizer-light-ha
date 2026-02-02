@@ -44,7 +44,7 @@ class BatteryOptimizerLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_API_URL, default=DEFAULT_API_URL): str,
             vol.Required(CONF_API_KEY): str,
             vol.Required(CONF_SOC_SENSOR): EntitySelector(
-                EntitySelectorConfig(domain="sensor", device_class="battery")
+                EntitySelectorConfig(domain="sensor")
             ),
             vol.Required(CONF_GRID_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
@@ -94,7 +94,7 @@ class BatteryOptimizerLightOptionsFlow(config_entries.OptionsFlow):
             vol.Required(CONF_API_URL, default=data.get(CONF_API_URL, DEFAULT_API_URL)): str,
             vol.Required(CONF_API_KEY, default=data.get(CONF_API_KEY, "")): str,
             vol.Required(CONF_SOC_SENSOR, default=data.get(CONF_SOC_SENSOR)): EntitySelector(
-                EntitySelectorConfig(domain="sensor", device_class="battery")
+                EntitySelectorConfig(domain="sensor")
             ),
             vol.Required(CONF_GRID_SENSOR, default=data.get(CONF_GRID_SENSOR)): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
