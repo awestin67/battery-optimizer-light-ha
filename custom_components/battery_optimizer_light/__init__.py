@@ -223,6 +223,11 @@ class PeakGuard:
             raw_limit = float(limit_state.state)
             limit_w = raw_limit * 1000 if raw_limit < 100 else raw_limit
 
+            # Skydd: Om gränsvärdet är orimligt lågt (t.ex. 0), avbryt.
+            if limit_w < 100:
+                _LOGGER.warning(f"Peak limit is too low ({limit_w} W). Ignoring to prevent false triggering.")
+                return
+
             # 2. Hämta Lasten
             current_load = 0.0
             if virtual_load_id:
