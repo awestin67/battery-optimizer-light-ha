@@ -60,7 +60,7 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
                 is_solar_override = self.peak_guard.is_solar_override
 
             # 3. Hämta förbrukningsprognos (Valfritt)
-            consumption_forecast = None
+            consumption_forecast = 0.0
             if self.consumption_forecast_entity:
                 forecast_state = self.hass.states.get(self.consumption_forecast_entity)
                 if forecast_state and forecast_state.state not in ["unknown", "unavailable"]:
