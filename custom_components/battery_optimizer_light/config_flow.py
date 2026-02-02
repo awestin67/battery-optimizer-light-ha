@@ -30,6 +30,7 @@ from .const import (
     CONF_BATTERY_STATUS_SENSOR,
     CONF_BATTERY_STATUS_KEYWORDS,
     CONF_VIRTUAL_LOAD_SENSOR,
+    CONF_CONSUMPTION_FORECAST_SENSOR,
     DEFAULT_BATTERY_STATUS_KEYWORDS,
 )
 
@@ -59,6 +60,9 @@ class BatteryOptimizerLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Optional(CONF_BATTERY_STATUS_KEYWORDS, default=DEFAULT_BATTERY_STATUS_KEYWORDS): str,
             vol.Optional(CONF_VIRTUAL_LOAD_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
+            ),
+            vol.Optional(CONF_CONSUMPTION_FORECAST_SENSOR): EntitySelector(
+                EntitySelectorConfig(domain="sensor")
             ),
         })
 
@@ -111,6 +115,11 @@ class BatteryOptimizerLightOptionsFlow(config_entries.OptionsFlow):
             )): str,
             vol.Optional(CONF_VIRTUAL_LOAD_SENSOR, default=data.get(CONF_VIRTUAL_LOAD_SENSOR)): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
+            ),
+            vol.Optional(CONF_CONSUMPTION_FORECAST_SENSOR, default=data.get(
+                CONF_CONSUMPTION_FORECAST_SENSOR
+            )): EntitySelector(
+                EntitySelectorConfig(domain="sensor")
             ),
         })
 

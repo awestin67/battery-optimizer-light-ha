@@ -70,6 +70,7 @@ Du behöver veta namnet på följande sensorer i din Home Assistant:
     * **Battery Status Sensor:** (Valfritt) Välj sensorn som visar driftläge.
     * **Maintenance Keywords:** (Valfritt) Kommaseparerad lista med ord som pausar styrningen (t.ex. `battery_care, error`).
     * **Virtual Load Sensor:** (Valfritt) Lämna tomt för automatisk beräkning.
+    * **Consumption Forecast Sensor:** (Valfritt) Välj sensorn som visar prognos för morgondagens förbrukning (kWh).
 
 ### 💡 Tips: Detektera Underhåll (Battery Care)
 För att systemet ska pausa automatiskt när batteriet kalibreras (Battery Care) eller tappar internet, skapa en sensor som läser `Eclipse Status`.

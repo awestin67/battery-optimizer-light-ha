@@ -34,6 +34,7 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
         self.api_url = f"{config['api_url'].rstrip('/')}/signal"
         self.api_key = config['api_key']
         self.soc_entity = config['soc_sensor']
+        self.consumption_forecast_entity = config.get("consumption_forecast_sensor")
 
     async def _async_update_data(self):
         """Körs var 5:e minut."""
@@ -58,11 +59,22 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
             if hasattr(self, "peak_guard") and self.peak_guard:
                 is_solar_override = self.peak_guard.is_solar_override
 
+            # 3. Hämta förbrukningsprognos (Valfritt)
+            consumption_forecast = None
+            if self.consumption_forecast_entity:
+                forecast_state = self.hass.states.get(self.consumption_forecast_entity)
+                if forecast_state and forecast_state.state not in ["unknown", "unavailable"]:
+                    try:
+                        consumption_forecast = float(forecast_state.state)
+                    except ValueError:
+                        pass  # Ignorera om värdet inte är ett tal
+
             # 2. Payload (Endast det backend behöver)
             payload = {
                 "api_key": self.api_key,
                 "soc": soc,
-                "is_solar_override": is_solar_override
+                "is_solar_override": is_solar_override,
+                "consumption_forecast_kwh": consumption_forecast
             }
 
             _LOGGER.debug(f"Light-Request: {payload}")
