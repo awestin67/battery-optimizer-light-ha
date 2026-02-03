@@ -33,6 +33,14 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
         )
         self.api_url = f"{config['api_url'].rstrip('/')}/signal"
         self.api_key = config['api_key']
+
+        # --- DEV OVERRIDE (Avkommentera vid lokal utveckling) ---
+        # self.api_url = "https://battery-light-development.up.railway.app/signal"
+
+        # Säkerhetsvarning om vi kör mot dev
+        if "development" in self.api_url:
+            _LOGGER.warning("⚠️ VARNING: Integrationen körs mot DEVELOPMENT-backend: %s", self.api_url)
+
         self.soc_entity = config['soc_sensor']
         self.consumption_forecast_entity = config.get("consumption_forecast_sensor")
 
