@@ -34,6 +34,7 @@ from .const import (
     CONF_BATTERY_STATUS_KEYWORDS,
     CONF_VIRTUAL_LOAD_SENSOR,
     DEFAULT_BATTERY_STATUS_KEYWORDS,
+    DEFAULT_API_URL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,6 +45,16 @@ LIMIT_ENTITY = "sensor.optimizer_light_peak_limit"
 async def async_setup_entry(hass: HomeAssistant, entry):
     """Set up from a config entry."""
     config = entry.data
+
+    # --- MIGRERING: Byt ut gammal dev-url mot production ---
+    # Detta fixar problemet för befintliga användare som har kvar den gamla URL:en
+    current_url = config.get(CONF_API_URL, "")
+    if "battery-light-development" in current_url:
+        _LOGGER.warning("⚠️ Migrerar API URL från Development till Production...")
+        new_data = dict(config)
+        new_data[CONF_API_URL] = DEFAULT_API_URL
+        hass.config_entries.async_update_entry(entry, data=new_data)
+        config = new_data  # Uppdatera variabeln så coordinatorn får rätt URL direkt
 
     coordinator = BatteryOptimizerLightCoordinator(hass, config)
     await coordinator.async_config_entry_first_refresh()
