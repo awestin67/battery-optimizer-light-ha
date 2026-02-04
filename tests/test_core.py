@@ -575,3 +575,44 @@ async def test_peak_guard_stops_at_zero_soc(mock_hass_instance):
         "sonnen_force_charge",
         service_data={"power": 0}
     )
+
+@pytest.mark.asyncio
+async def test_peak_guard_throttles_charge(mock_hass_instance):
+    """Krav: Om molnet vill ladda men lasten är hög, ska laddningen strypas."""
+    coordinator = MagicMock()
+    coordinator.data = {"action": "CHARGE", "target_power_kw": 3.0} # 3000W
+
+    guard = PeakGuard(mock_hass_instance, MOCK_CONFIG, coordinator)
+
+    # Setup sensorer
+    limit_state = MagicMock()
+    limit_state.state = "5.0" # 5000W
+
+    load_state = MagicMock()
+    load_state.state = "4000" # 4000W House Load
+
+    # SoC spelar ingen roll här, men vi sätter den
+    soc_state = MagicMock()
+    soc_state.state = "50"
+
+    def get_state_side_effect(entity_id):
+        if entity_id == "sensor.optimizer_light_peak_limit":
+            return limit_state
+        if entity_id == "sensor.husets_netto_last_virtuell":
+            return load_state
+        if entity_id == "sensor.soc":
+            return soc_state
+        return None
+    mock_hass_instance.states.get.side_effect = get_state_side_effect
+
+    # Kör update
+    await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
+
+    # Available = 5000 - 4000 - 200 (marginal) = 800W.
+    # Target = 3000W.
+    # Should throttle to 800W.
+    mock_hass_instance.services.async_call.assert_called_with(
+        "script",
+        "sonnen_force_charge",
+        service_data={"power": 800}
+    )

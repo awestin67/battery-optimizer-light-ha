@@ -273,16 +273,24 @@ class PeakGuard:
 
             # --- TYST FILTER ---
             wake_up_threshold = limit_w * 0.90
+
+            # Hämta moln-action tidigt för att se om vi behöver övervaka laddning
+            cloud_action = "HOLD"
+            if self.coordinator.data and "action" in self.coordinator.data:
+                cloud_action = str(self.coordinator.data.get("action")).upper()
+
             # Avbryt bara om:
             # 1. Ingen peak är aktiv.
             # 2. Ingen Solar Override är aktiv (vi måste kunna stänga av den).
             # 3. Lasten är under varningsgränsen.
             # 4. Vi INTE exporterar (för då måste vi kolla Solar Override).
+            # 5. Vi INTE laddar (för då måste vi kolla säkringen).
             if (
                 not self._has_reported
                 and not self._is_solar_override
                 and current_load < wake_up_threshold
                 and current_load > -200
+                and cloud_action != "CHARGE"
             ):
                 return
 
@@ -339,9 +347,7 @@ class PeakGuard:
 
             else:
                 # TILLSTÅND AV: Återgå till molnstrategi
-                cloud_action = "HOLD"
-                if self.coordinator.data and "action" in self.coordinator.data:
-                    cloud_action = str(self.coordinator.data.get("action")).upper()
+                # cloud_action är redan hämtad ovan
 
                 # --- SOLAR OVERRIDE ---
                 # Om vi exporterar el (negativ last) och molnet säger HOLD,
@@ -362,8 +368,29 @@ class PeakGuard:
                 if cloud_action != "HOLD":
                     self._hold_command_sent = False  # Återställ om molnet vill något annat
 
-                if cloud_action in ["DISCHARGE", "CHARGE"]:
-                    pass  # Låt molnet bestämma
+                if cloud_action == "CHARGE":
+                    # SÄKERHET: Kontrollera att vi inte laddar sönder säkringen
+                    target_kw = 0.0
+                    if self.coordinator.data and "target_power_kw" in self.coordinator.data:
+                        target_kw = float(self.coordinator.data.get("target_power_kw", 0.0))
+
+                    target_w = target_kw * 1000.0
+                    # Marginal på 200W för att vara säker
+                    available_w = limit_w - current_load - 200.0
+
+                    if target_w > available_w:
+                        throttled_w = max(0, int(available_w))
+                        # Avrunda till närmaste 50W för att minska fladder
+                        throttled_w = int(throttled_w / 50) * 50
+
+                        _LOGGER.warning(
+                            f"⚠️ CHARGE THROTTLED! Cloud: {target_w} W. Available: {available_w:.0f} W. "
+                            f"Limit: {limit_w} W. Setting: {throttled_w} W."
+                        )
+                        await self._call_script("sonnen_force_charge", {"power": throttled_w})
+
+                elif cloud_action == "DISCHARGE":
+                    pass # Låt molnet bestämma
 
                 elif cloud_action == "HOLD":
                     bat_entity = self.config.get(CONF_BATTERY_POWER_SENSOR)
