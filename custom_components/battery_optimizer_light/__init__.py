@@ -301,7 +301,7 @@ class PeakGuard:
             # --- NY LOGIK MED HYSTERES ---
 
             # Steg 1: Bestäm tillstånd (På / Av)
-            if not self._has_reported and current_load > limit_w and soc > 5:
+            if not self._has_reported and current_load > limit_w and soc > 0:
                 _LOGGER.info(f"🚨 PEAK DETECTED! Load: {current_load} W > Limit: {limit_w} W. Engaging battery.")
                 self._set_reported_state(True)
                 await self._report_peak(current_load, limit_w)
@@ -312,7 +312,7 @@ class PeakGuard:
                 await self._report_peak_clear(current_load, limit_w)
 
             # Steg 2: Agera baserat på tillstånd
-            if self._has_reported and soc > 5:
+            if self._has_reported and soc > 0:
                 # TILLSTÅND PÅ: Justera urladdning
                 max_inverter = 3300.0
                 if self.coordinator.data and "max_discharge_kw" in self.coordinator.data:

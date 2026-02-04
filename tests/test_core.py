@@ -509,3 +509,69 @@ async def test_peak_guard_pauses_on_custom_keyword(mock_hass_instance):
 
     # Verifiera att flaggan sattes
     assert guard._in_maintenance is True
+
+@pytest.mark.asyncio
+async def test_peak_guard_stops_at_zero_soc(mock_hass_instance):
+    """Krav: PeakGuard ska sluta urladda när SoC når 0%."""
+    coordinator = MagicMock()
+    coordinator.data = {"action": "HOLD"} # Molnet säger HOLD
+
+    guard = PeakGuard(mock_hass_instance, MOCK_CONFIG, coordinator)
+    guard._has_reported = True # Vi simulerar att PeakGuard redan är aktivt
+
+    # Setup sensorer
+    limit_state = MagicMock()
+    limit_state.state = "5.0" # 5 kW gräns
+
+    load_state = MagicMock()
+    load_state.state = "7000" # 7 kW last (behöver urladdning)
+
+    # Fall 1: SoC = 1% -> Ska fortsätta urladda
+    soc_state = MagicMock()
+    soc_state.state = "1"
+
+    # Batteriet står stilla just nu
+    bat_state = MagicMock()
+    bat_state.state = "0"
+
+    def get_state_side_effect(entity_id):
+        if entity_id == "sensor.optimizer_light_peak_limit":
+            return limit_state
+        if entity_id == "sensor.husets_netto_last_virtuell":
+            return load_state
+        if entity_id == "sensor.soc":
+            return soc_state
+        if entity_id == "sensor.bat_power":
+            return bat_state
+        return None
+    mock_hass_instance.states.get.side_effect = get_state_side_effect
+
+    # Kör update (SoC 1%)
+    await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
+
+    # Verifiera att vi urladdar (7000 - 5000 = 2000)
+    mock_hass_instance.services.async_call.assert_called_with(
+        "script",
+        "sonnen_force_discharge",
+        service_data={"power": 2000}
+    )
+
+    # Återställ mock
+    mock_hass_instance.services.async_call.reset_mock()
+
+    # Fall 2: SoC = 0% -> Ska sluta tvinga urladdning
+    soc_state.state = "0"
+
+    # Simulera att batteriet fortfarande laddar ur (eftersom vi tvingade det nyss)
+    bat_state.state = "2000"
+
+    # Kör update (SoC 0%)
+    await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
+
+    # Nu ska den skicka HOLD (force_charge 0) eftersom vi faller ur if-satsen (soc > 0 är False)
+    # och hamnar i else-satsen där molnet säger HOLD.
+    mock_hass_instance.services.async_call.assert_called_with(
+        "script",
+        "sonnen_force_charge",
+        service_data={"power": 0}
+    )
