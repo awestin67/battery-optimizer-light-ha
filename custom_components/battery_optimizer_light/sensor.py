@@ -87,8 +87,12 @@ class BatteryLightReasonSensor(CoordinatorEntity, SensorEntity):
     def state(self):
         # 1. Kolla först om den lokala effektvakten jobbar
         # (Detta skriver över molnets status, vilket är korrekt eftersom lokalt skydd har prio)
-        if hasattr(self.coordinator, "peak_guard") and self.coordinator.peak_guard.is_active:
-            return "Local Peak Guard Triggered"
+        if hasattr(self.coordinator, "peak_guard"):
+            pg = self.coordinator.peak_guard
+            if pg.is_active:
+                return "Local Peak Guard Triggered"
+            if pg.is_solar_override:
+                return "Solar Override (Local)"
 
         # 2. Annars visa vad molnet säger (t.ex. "Charging due to cheap price")
         return (self.coordinator.data or {}).get("reason", "Unknown")
