@@ -129,6 +129,7 @@ class PeakGuard:
         self._in_maintenance = False  # Flagga för underhållsläge
         self._maintenance_reason = None  # Orsak till underhållsläge
         self._maintenance_cooldown_start = None # Tidsstämpel för när underhållssignalen försvann
+        self._last_sent_command = None  # Håller koll på senaste kommandot för att undvika spam
 
     @property
     def is_active(self):
@@ -344,6 +345,7 @@ class PeakGuard:
 
                 if power_to_discharge > 100:  # Skicka bara kommando om det finns ett verkligt behov
                     await self._call_script("sonnen_force_discharge", {"power": int(power_to_discharge)})
+                    self._last_sent_command = "PEAK"
 
             else:
                 # TILLSTÅND AV: Återgå till molnstrategi
@@ -358,12 +360,13 @@ class PeakGuard:
                     cloud_action = "IDLE"  # Tvinga Auto-läge lokalt
 
                 if self._is_solar_override != new_override:
+                    self._is_solar_override = new_override
+                    self.coordinator.async_update_listeners()  # Uppdatera sensorer
+
                     if new_override:
                         await self._report_solar_override(current_load, limit_w)
                     else:
                         await self._report_solar_override_clear(current_load, limit_w)
-                    self._is_solar_override = new_override
-                    self.coordinator.async_update_listeners()  # Uppdatera sensorer
 
                 if cloud_action != "HOLD":
                     self._hold_command_sent = False  # Återställ om molnet vill något annat
@@ -388,6 +391,7 @@ class PeakGuard:
                             f"Limit: {limit_w} W. Setting: {throttled_w} W."
                         )
                         await self._call_script("sonnen_force_charge", {"power": throttled_w})
+                        self._last_sent_command = "CHARGE"
 
                 elif cloud_action == "DISCHARGE":
                     pass # Låt molnet bestämma
@@ -407,6 +411,7 @@ class PeakGuard:
                             _LOGGER.debug("HOLD requested, but battery is active. Sending stop command.")
                             await self._call_script("sonnen_force_charge", {"power": 0})
                             self._hold_command_sent = True
+                            self._last_sent_command = "HOLD"
                     else:
                         # Batteriet är redan stilla, så nollställ flaggan.
                         if self._hold_command_sent:
@@ -414,7 +419,9 @@ class PeakGuard:
                         self._hold_command_sent = False
 
                 elif cloud_action == "IDLE":
-                    await self._call_script("sonnen_set_auto_mode", {})
+                    if self._last_sent_command != "IDLE":
+                        await self._call_script("sonnen_set_auto_mode", {})
+                        self._last_sent_command = "IDLE"
 
                 else:
                     pass  # Okänt läge -> Gör inget
@@ -430,7 +437,7 @@ class PeakGuard:
                 "limit_kw": round(limit_w / 1000.0, 2)
             }
             async with aiohttp.ClientSession() as session:
-                async with session.post(api_url, json=payload) as resp:
+                async with session.post(api_url, json=payload, timeout=10) as resp:
                     if resp.status == 200:
                         _LOGGER.debug(f"Cloud report sent: PeakGuard Triggered: {payload['grid_power_kw']} kW")
         except Exception as e:
@@ -445,7 +452,7 @@ class PeakGuard:
                 "limit_kw": round(limit_w / 1000.0, 2)
             }
             async with aiohttp.ClientSession() as session:
-                async with session.post(api_url, json=payload) as resp:
+                async with session.post(api_url, json=payload, timeout=10) as resp:
                     if resp.status == 200:
                         _LOGGER.debug(f"Cloud report sent: PeakGuard Cleared: {payload['grid_power_kw']} kW")
         except Exception as e:
@@ -460,7 +467,7 @@ class PeakGuard:
                 "limit_kw": round(limit_w / 1000.0, 2)
             }
             async with aiohttp.ClientSession() as session:
-                async with session.post(api_url, json=payload) as resp:
+                async with session.post(api_url, json=payload, timeout=10) as resp:
                     if resp.status == 200:
                         _LOGGER.debug(f"Cloud report sent: PeakGuard Failure: {payload['grid_power_kw']} kW")
         except Exception as e:
@@ -475,7 +482,7 @@ class PeakGuard:
                 "limit_kw": round(limit_w / 1000.0, 2)
             }
             async with aiohttp.ClientSession() as session:
-                async with session.post(api_url, json=payload) as resp:
+                async with session.post(api_url, json=payload, timeout=10) as resp:
                     if resp.status == 200:
                         _LOGGER.debug(f"Cloud report sent: Solar Override: {payload['grid_power_kw']} kW")
         except Exception as e:
@@ -490,7 +497,7 @@ class PeakGuard:
                 "limit_kw": round(limit_w / 1000.0, 2)
             }
             async with aiohttp.ClientSession() as session:
-                async with session.post(api_url, json=payload) as resp:
+                async with session.post(api_url, json=payload, timeout=10) as resp:
                     if resp.status == 200:
                         _LOGGER.debug(f"Cloud report sent: Solar Override Cleared: {payload['grid_power_kw']} kW")
         except Exception as e:
