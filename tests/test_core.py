@@ -246,6 +246,7 @@ def test_status_sensor():
     peak_guard.is_active = False
     peak_guard.in_maintenance = False
     peak_guard.maintenance_reason = None
+    peak_guard.is_solar_override = False
     coordinator.peak_guard = peak_guard
 
     sensor = BatteryLightStatusSensor(coordinator)
@@ -271,6 +272,12 @@ def test_status_sensor():
     peak_guard.maintenance_reason = "Service Mode"
     assert sensor.state == "Maintenance mode detected (Service Mode). Pausing control."
     assert sensor.icon == "mdi:tools"
+
+    # Fall 5: Solar Override
+    peak_guard.in_maintenance = False
+    peak_guard.is_solar_override = True
+    assert sensor.state == "Solar Override Active"
+    assert sensor.icon == "mdi:solar-panel"
 
 @pytest.mark.asyncio
 async def test_peak_guard_reports_failure_on_overload(mock_hass_instance):

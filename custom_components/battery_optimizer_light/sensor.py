@@ -142,15 +142,20 @@ class BatteryLightStatusSensor(CoordinatorEntity, SensorEntity):
         is_triggered = False
         in_maintenance = False
         maintenance_reason = None
+        is_solar_override = False
 
         if hasattr(self.coordinator, "peak_guard"):
             pg = self.coordinator.peak_guard
             is_triggered = pg.is_active
             in_maintenance = pg.in_maintenance
             maintenance_reason = pg.maintenance_reason
+            is_solar_override = pg.is_solar_override
 
         if in_maintenance:
             return f"Maintenance mode detected ({maintenance_reason}). Pausing control."
+
+        if is_solar_override:
+            return "Solar Override Active"
 
         if not is_active:
             return "Disabled"
@@ -166,6 +171,8 @@ class BatteryLightStatusSensor(CoordinatorEntity, SensorEntity):
             return "mdi:shield-alert"
         if "Maintenance" in status:
             return "mdi:tools"
+        if "Solar Override" in status:
+            return "mdi:solar-panel"
         return "mdi:shield-search"
 
 class BatteryLightVirtualLoadSensor(SensorEntity):
