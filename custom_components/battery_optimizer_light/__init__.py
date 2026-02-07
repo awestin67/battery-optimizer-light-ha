@@ -280,18 +280,32 @@ class PeakGuard:
             if self.coordinator.data and "action" in self.coordinator.data:
                 cloud_action = str(self.coordinator.data.get("action")).upper()
 
+            # Kontrollera om batteriet rör på sig (för att kunna tvinga stopp vid HOLD)
+            bat_is_moving = False
+            bat_entity = self.config.get(CONF_BATTERY_POWER_SENSOR)
+            if bat_entity:
+                b_state = self.hass.states.get(bat_entity)
+                if b_state and b_state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
+                    try:
+                        if abs(float(b_state.state)) > 100:
+                            bat_is_moving = True
+                    except ValueError:
+                        pass
+
             # Avbryt bara om:
             # 1. Ingen peak är aktiv.
             # 2. Ingen Solar Override är aktiv (vi måste kunna stänga av den).
             # 3. Lasten är under varningsgränsen.
             # 4. Vi INTE exporterar (för då måste vi kolla Solar Override).
             # 5. Vi INTE laddar (för då måste vi kolla säkringen).
+            # 6. Vi INTE behöver tvinga stopp (HOLD + Battery Moving).
             if (
                 not self._has_reported
                 and not self._is_solar_override
                 and current_load < wake_up_threshold
                 and current_load > -200
                 and cloud_action != "CHARGE"
+                and not (cloud_action == "HOLD" and bat_is_moving)
             ):
                 return
 
