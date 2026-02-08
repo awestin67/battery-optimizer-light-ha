@@ -129,6 +129,84 @@ def run_lint():
         print("\n❌ Linting misslyckades! Åtgärda felen innan release.")
         sys.exit(1)
 
+def create_github_release(version):
+    print("\n--- 🚀 SKAPA GITHUB RELEASE ---")
+
+    # Kolla om gh är installerat
+    try:
+        subprocess.run(["gh", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("⚠️  GitHub CLI (gh) hittades inte.")
+        print("   Tips: Installera med 'winget install GitHub.cli' (Windows) eller 'brew install gh' (Mac).")
+        print(f"👉 Skapa release manuellt här: https://github.com/awestin67/battery-optimizer-light-ha/releases/new?tag=v{version}")
+        return
+
+    if input("Vill du skapa en GitHub Release nu? (j/n): ").lower() != 'j':
+        return
+
+    # Försök hämta commits sedan förra taggen
+    suggested_notes = ""
+    try:
+        tags = subprocess.check_output(
+            ["git", "tag", "--sort=-creatordate"],
+            stderr=subprocess.DEVNULL
+        ).decode().strip().splitlines()
+
+        if len(tags) >= 2:
+            prev_tag = tags[1]
+            commits = subprocess.check_output(
+                ["git", "log", f"{prev_tag}..HEAD", "--pretty=format:- %s"],
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
+
+            # Filtrera bort release-commiten
+            lines = [line for line in commits.splitlines() if f"Release {version}" not in line]
+            suggested_notes = "\n".join(lines)
+    except Exception:
+        pass
+
+    if suggested_notes:
+        print("\n📝 Föreslagna release notes (baserat på commits):")
+        print("-" * 40)
+        print(suggested_notes)
+        print("-" * 40)
+        print("Tryck ENTER för att använda dessa, eller skriv egna nedan (avsluta med tom rad):")
+    else:
+        print("Skriv in release notes (avsluta med en tom rad):")
+
+    notes = ""
+    lines = []
+    first_line = True
+    while True:
+        line = input()
+        if first_line and not line and suggested_notes:
+            notes = suggested_notes
+            break
+
+        if not line:
+            break
+        lines.append(line)
+        first_line = False
+
+    if lines:
+        notes = "\n".join(lines).strip()
+
+    if not notes:
+        notes = f"Release v{version}"
+
+    tag_name = f"v{version}"
+
+    # Skapa release
+    cmd = [
+        "gh", "release", "create", tag_name,
+        "--title", f"v{version}",
+        "--notes", notes
+    ]
+
+    print("⏳ Skapar release på GitHub...")
+    run_command(cmd)
+    print(f"✅ GitHub Release {tag_name} skapad!")
+
 def main():
     # 1. Säkerhetskollar
     check_branch()
@@ -180,8 +258,9 @@ def main():
     run_command(["git", "push"])
     run_command(["git", "push", "--tags"])
 
+    create_github_release(new_ver)
+
     print(f"\n✨ KLART! Version {new_ver} är publicerad.")
-    print("Kom ihåg att skapa en Release inne på GitHub också om du vill ha release notes!")
 
 if __name__ == "__main__":
     main()

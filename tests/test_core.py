@@ -483,6 +483,50 @@ def test_virtual_load_sensor_calculation():
     assert sensor.state == -4000
 
 @pytest.mark.asyncio
+async def test_peak_guard_solar_override_hysteresis(mock_hass_instance):
+    """Krav: Solar Override ska ha hysteres för att undvika 'flapping' vid gränsvärdet."""
+    coordinator = MagicMock()
+    coordinator.data = {"action": "HOLD"}
+
+    guard = PeakGuard(mock_hass_instance, MOCK_CONFIG, coordinator)
+
+    # Mocka sensorer
+    limit_state = MagicMock()
+    limit_state.state = "5.0"
+    soc_state = MagicMock()
+    soc_state.state = "50"
+
+    # Helper för att simulera last-ändringar
+    async def set_load(load_w):
+        load_state = MagicMock()
+        load_state.state = str(load_w)
+
+        def get_state_side_effect(entity_id):
+            if entity_id == "sensor.optimizer_light_peak_limit":
+                return limit_state
+            if entity_id == "sensor.husets_netto_last_virtuell":
+                return load_state
+            if entity_id == "sensor.soc":
+                return soc_state
+            return None
+        mock_hass_instance.states.get.side_effect = get_state_side_effect
+
+        await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
+
+    # 1. Trigga Override (Last < -400, t.ex. -450)
+    await set_load(-450)
+    assert guard.is_solar_override is True
+
+    # 2. Minska exporten till -200 (Fortfarande export, men över trigg-gränsen -400)
+    # Utan hysteres skulle denna stängas av här och orsaka flapping.
+    await set_load(-200)
+    assert guard.is_solar_override is True
+
+    # 3. Gå över reset-gränsen (t.ex. -100) för att stänga av
+    await set_load(-50)
+    assert guard.is_solar_override is False
+
+@pytest.mark.asyncio
 async def test_peak_guard_pauses_on_custom_keyword(mock_hass_instance):
     """Krav: Användaren ska kunna konfigurera egna nyckelord för underhåll."""
     config = MOCK_CONFIG.copy()

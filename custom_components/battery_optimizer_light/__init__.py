@@ -368,9 +368,22 @@ class PeakGuard:
                 # --- SOLAR OVERRIDE ---
                 # Om vi exporterar el (negativ last) och molnet säger HOLD,
                 # är det bättre att låta batteriet ladda (Auto) än att tvinga 0W.
-                new_override = False
-                if cloud_action == "HOLD" and current_load < -200:
-                    new_override = True
+
+                # Hysteres: Behåll status om vi ligger i dödbandet
+                # Trigger: -400W (Export) | Reset: -100W (Minskad export)
+                SOLAR_TRIGGER = -400.0
+                SOLAR_RESET = -100.0
+                new_override = self._is_solar_override
+
+                if cloud_action == "HOLD":
+                    if current_load < SOLAR_TRIGGER:
+                        new_override = True
+                    elif current_load > SOLAR_RESET:
+                        new_override = False
+                else:
+                    new_override = False
+
+                if new_override:
                     cloud_action = "IDLE"  # Tvinga Auto-läge lokalt
 
                 if self._is_solar_override != new_override:
