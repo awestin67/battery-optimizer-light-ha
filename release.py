@@ -19,6 +19,11 @@ import subprocess
 import sys
 import os
 
+try:
+    import requests
+except ImportError:
+    sys.exit("❌ Modulen 'requests' saknas. Installera den med: pip install requests")
+
 # --- INSTÄLLNINGAR ---
 # Korrekt sökväg baserat på ditt domännamn
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -132,16 +137,36 @@ def run_lint():
 def create_github_release(version):
     print("\n--- 🚀 SKAPA GITHUB RELEASE ---")
 
-    # Kolla om gh är installerat
+    # Hitta repo-namn från git config
+    repo_part = None
     try:
-        subprocess.run(["gh", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print("⚠️  GitHub CLI (gh) hittades inte.")
-        print("   Tips: Installera med 'winget install GitHub.cli' (Windows) eller 'brew install gh' (Mac).")
-        print(f"👉 Skapa release manuellt här: https://github.com/awestin67/battery-optimizer-light-ha/releases/new?tag=v{version}")
+        remote_url = subprocess.check_output(
+            ["git", "config", "--get", "remote.origin.url"], shell=False
+        ).decode().strip()
+        # Hantera git@github.com:user/repo.git och https://github.com/user/repo.git
+        if "github.com" in remote_url:
+            # Enkel parsing
+            repo_part = remote_url.split("github.com")[-1].replace(":", "/").lstrip("/")
+            if repo_part.endswith(".git"):
+                repo_part = repo_part[:-4]
+    except Exception:
+        print("⚠️  Kunde inte läsa git remote URL.")
+
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        print("\n⚠️  Ingen GITHUB_TOKEN hittad.")
+        print("   (GitHub kräver token för att skapa releaser via API, även för publika repon)")
+
+        url = f"https://github.com/{repo_part}/releases/new?tag=v{version}" if repo_part else f"https://github.com/awestin67/battery-optimizer-light-ha/releases/new?tag=v{version}"
+        print(f"👉 Skapa release manuellt här: {url}")
+        return
+
+    if not repo_part:
+        print("⚠️  Kunde inte identifiera GitHub-repo (ingen github.com i remote).")
         return
 
     if input("Vill du skapa en GitHub Release nu? (j/n): ").lower() != 'j':
+        print(f"👉 Du kan skapa releasen manuellt här: https://github.com/{repo_part}/releases/new?tag=v{version}")
         return
 
     # Försök hämta commits sedan förra taggen
@@ -194,18 +219,31 @@ def create_github_release(version):
     if not notes:
         notes = f"Release v{version}"
 
-    tag_name = f"v{version}"
+    print(f"🚀 Skapar GitHub Release på {repo_part}...")
 
-    # Skapa release
-    cmd = [
-        "gh", "release", "create", tag_name,
-        "--title", f"v{version}",
-        "--notes", notes
-    ]
+    url = f"https://api.github.com/repos/{repo_part}/releases"
+    payload = {
+        "tag_name": f"v{version}",
+        "name": f"v{version}",
+        "body": notes,
+        "draft": False,
+        "prerelease": False
+    }
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
 
-    print("⏳ Skapar release på GitHub...")
-    run_command(cmd)
-    print(f"✅ GitHub Release {tag_name} skapad!")
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=10)
+        if resp.status_code == 201:
+            print(f"✅ Release v{version} skapad på GitHub!")
+            print(f"🔗 Länk: {resp.json().get('html_url')}")
+        else:
+            print(f"❌ Misslyckades skapa release: {resp.status_code}")
+            print(resp.text)
+    except Exception as e:
+        print(f"❌ Fel vid API-anrop: {e}")
 
 def main():
     # 1. Säkerhetskollar
