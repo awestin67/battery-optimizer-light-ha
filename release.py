@@ -24,6 +24,13 @@ try:
 except ImportError:
     sys.exit("❌ Modulen 'requests' saknas. Installera den med: pip install requests")
 
+# Försök ladda .env om python-dotenv finns
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # --- INSTÄLLNINGAR ---
 # Korrekt sökväg baserat på ditt domännamn
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -156,6 +163,7 @@ def create_github_release(version):
     if not token:
         print("\n⚠️  Ingen GITHUB_TOKEN hittad.")
         print("   (GitHub kräver token för att skapa releaser via API, även för publika repon)")
+        print("   (Tips: Lägg GITHUB_TOKEN i .env och kör 'pip install python-dotenv')")
 
         url = f"https://github.com/{repo_part}/releases/new?tag=v{version}" if repo_part else f"https://github.com/awestin67/battery-optimizer-light-ha/releases/new?tag=v{version}"
         print(f"👉 Skapa release manuellt här: {url}")
