@@ -203,23 +203,29 @@ def create_github_release(version):
         print("-" * 40)
         print(suggested_notes)
         print("-" * 40)
-        print("Tryck ENTER för att använda dessa, eller skriv egna nedan (avsluta med tom rad):")
+        print("Tryck ENTER för att använda dessa, eller skriv egna nedan.")
+        print("(Avsluta inmatningen genom att trycka ENTER på en tom rad)")
     else:
-        print("Skriv in release notes (avsluta med en tom rad):")
+        print("Skriv in release notes.")
+        print("(Avsluta inmatningen genom att trycka ENTER på en tom rad)")
 
     notes = ""
     lines = []
     first_line = True
-    while True:
-        line = input()
-        if first_line and not line and suggested_notes:
-            notes = suggested_notes
-            break
+    try:
+        while True:
+            line = input("> ")
+            if first_line and not line and suggested_notes:
+                notes = suggested_notes
+                break
 
-        if not line:
-            break
-        lines.append(line)
-        first_line = False
+            if not line:
+                break
+            lines.append(line)
+            first_line = False
+    except KeyboardInterrupt:
+        print("\n⚠️  Avbröt inmatning. Hoppar över GitHub Release.")
+        return
 
     if lines:
         notes = "\n".join(lines).strip()
