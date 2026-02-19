@@ -17,7 +17,12 @@
 import voluptuous as vol  # type: ignore
 from homeassistant import config_entries # type: ignore
 from homeassistant.core import callback  # type: ignore
-from homeassistant.helpers.selector import EntitySelector, EntitySelectorConfig # type: ignore
+from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
+    TextSelector,
+    TextSelectorConfig,
+)
 from .const import (
     DOMAIN,
     CONF_API_URL,
@@ -42,8 +47,10 @@ class BatteryOptimizerLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(title="Battery Optimizer Light", data=user_input)
 
         schema = vol.Schema({
-            vol.Required(CONF_API_URL, default=DEFAULT_API_URL): str,
-            vol.Required(CONF_API_KEY): str,
+            vol.Required(CONF_API_URL, default=DEFAULT_API_URL): TextSelector(
+                TextSelectorConfig(type="url")
+            ),
+            vol.Required(CONF_API_KEY): TextSelector(),
             vol.Required(CONF_SOC_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor")
             ),
@@ -57,7 +64,9 @@ class BatteryOptimizerLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Optional(CONF_BATTERY_STATUS_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor")
             ),
-            vol.Optional(CONF_BATTERY_STATUS_KEYWORDS, default=DEFAULT_BATTERY_STATUS_KEYWORDS): str,
+            vol.Optional(CONF_BATTERY_STATUS_KEYWORDS, default=DEFAULT_BATTERY_STATUS_KEYWORDS): TextSelector(
+                TextSelectorConfig(multiline=True)
+            ),
             vol.Optional(CONF_VIRTUAL_LOAD_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
@@ -70,12 +79,12 @@ class BatteryOptimizerLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
         return BatteryOptimizerLightOptionsFlow(config_entry)
 
 class BatteryOptimizerLightOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, config_entry):
-        self.config_entry = config_entry
+        self._config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
@@ -86,17 +95,19 @@ class BatteryOptimizerLightOptionsFlow(config_entries.OptionsFlow):
 
             # HÄR ÄR FIXEN: Vi skriver över grundkonfigurationen direkt
             self.hass.config_entries.async_update_entry(
-                self.config_entry,
+                self._config_entry,
                 data=user_input
             )
             return self.async_create_entry(title="", data={})
 
         # Vi läser nuvarande värden direkt från grunddatan
-        data = self.config_entry.data
+        data = self._config_entry.data
 
         schema = vol.Schema({
-            vol.Required(CONF_API_URL, default=data.get(CONF_API_URL, DEFAULT_API_URL)): str,
-            vol.Required(CONF_API_KEY, default=data.get(CONF_API_KEY, "")): str,
+            vol.Required(CONF_API_URL, default=data.get(CONF_API_URL, DEFAULT_API_URL)): TextSelector(
+                TextSelectorConfig(type="url")
+            ),
+            vol.Required(CONF_API_KEY, default=data.get(CONF_API_KEY, "")): TextSelector(),
             vol.Required(CONF_SOC_SENSOR, default=data.get(CONF_SOC_SENSOR)): EntitySelector(
                 EntitySelectorConfig(domain="sensor")
             ),
@@ -112,7 +123,7 @@ class BatteryOptimizerLightOptionsFlow(config_entries.OptionsFlow):
             ),
             vol.Optional(CONF_BATTERY_STATUS_KEYWORDS, default=data.get(
                 CONF_BATTERY_STATUS_KEYWORDS, DEFAULT_BATTERY_STATUS_KEYWORDS
-            )): str,
+            )): TextSelector(TextSelectorConfig(multiline=True)),
             vol.Optional(CONF_VIRTUAL_LOAD_SENSOR, default=data.get(CONF_VIRTUAL_LOAD_SENSOR)): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
