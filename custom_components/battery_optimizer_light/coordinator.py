@@ -15,9 +15,9 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import logging
-import aiohttp
 from datetime import timedelta
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # type: ignore
+from homeassistant.helpers.aiohttp_client import async_get_clientsession # type: ignore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -87,13 +87,13 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
 
             _LOGGER.debug(f"Light-Request: {payload}")
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.api_url, json=payload, timeout=10) as response:
-                    if response.status != 200:
-                        text = await response.text()
-                        raise UpdateFailed(f"Server {response.status}: {text}")
+            session = async_get_clientsession(self.hass)
+            async with session.post(self.api_url, json=payload, timeout=10) as response:
+                if response.status != 200:
+                    text = await response.text()
+                    raise UpdateFailed(f"Server {response.status}: {text}")
 
-                    return await response.json()
+                return await response.json()
 
         except Exception as err:
             _LOGGER.error(f"Light-Error: {err}")

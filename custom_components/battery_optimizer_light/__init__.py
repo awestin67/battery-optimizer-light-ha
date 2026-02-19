@@ -15,12 +15,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import logging
-import aiohttp
 from datetime import timedelta
 import homeassistant.util.dt as dt_util
 from homeassistant.core import HomeAssistant, ServiceCall, CoreState # type: ignore
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN # type: ignore
 from homeassistant.helpers.event import async_track_state_change_event # type: ignore
+from homeassistant.helpers.aiohttp_client import async_get_clientsession # type: ignore
 from .coordinator import BatteryOptimizerLightCoordinator
 from .const import (
     DOMAIN,
@@ -463,10 +463,10 @@ class PeakGuard:
                 "grid_power_kw": round(grid_w / 1000.0, 2),
                 "limit_kw": round(limit_w / 1000.0, 2)
             }
-            async with aiohttp.ClientSession() as session:
-                async with session.post(api_url, json=payload, timeout=10) as resp:
-                    if resp.status == 200:
-                        _LOGGER.debug(f"Cloud report sent: PeakGuard Triggered: {payload['grid_power_kw']} kW")
+            session = async_get_clientsession(self.hass)
+            async with session.post(api_url, json=payload, timeout=10) as resp:
+                if resp.status == 200:
+                    _LOGGER.debug(f"Cloud report sent: PeakGuard Triggered: {payload['grid_power_kw']} kW")
         except Exception as e:
             _LOGGER.error(f"Failed to report peak: {e}")
 
@@ -478,10 +478,10 @@ class PeakGuard:
                 "grid_power_kw": round(grid_w / 1000.0, 2),
                 "limit_kw": round(limit_w / 1000.0, 2)
             }
-            async with aiohttp.ClientSession() as session:
-                async with session.post(api_url, json=payload, timeout=10) as resp:
-                    if resp.status == 200:
-                        _LOGGER.debug(f"Cloud report sent: PeakGuard Cleared: {payload['grid_power_kw']} kW")
+            session = async_get_clientsession(self.hass)
+            async with session.post(api_url, json=payload, timeout=10) as resp:
+                if resp.status == 200:
+                    _LOGGER.debug(f"Cloud report sent: PeakGuard Cleared: {payload['grid_power_kw']} kW")
         except Exception as e:
             _LOGGER.error(f"Failed to report peak clear: {e}")
 
@@ -493,10 +493,10 @@ class PeakGuard:
                 "grid_power_kw": round(grid_w / 1000.0, 2),
                 "limit_kw": round(limit_w / 1000.0, 2)
             }
-            async with aiohttp.ClientSession() as session:
-                async with session.post(api_url, json=payload, timeout=10) as resp:
-                    if resp.status == 200:
-                        _LOGGER.debug(f"Cloud report sent: PeakGuard Failure: {payload['grid_power_kw']} kW")
+            session = async_get_clientsession(self.hass)
+            async with session.post(api_url, json=payload, timeout=10) as resp:
+                if resp.status == 200:
+                    _LOGGER.debug(f"Cloud report sent: PeakGuard Failure: {payload['grid_power_kw']} kW")
         except Exception as e:
             _LOGGER.error(f"Failed to report peak failure: {e}")
 
@@ -508,10 +508,10 @@ class PeakGuard:
                 "grid_power_kw": round(grid_w / 1000.0, 2),
                 "limit_kw": round(limit_w / 1000.0, 2)
             }
-            async with aiohttp.ClientSession() as session:
-                async with session.post(api_url, json=payload, timeout=10) as resp:
-                    if resp.status == 200:
-                        _LOGGER.debug(f"Cloud report sent: Solar Override: {payload['grid_power_kw']} kW")
+            session = async_get_clientsession(self.hass)
+            async with session.post(api_url, json=payload, timeout=10) as resp:
+                if resp.status == 200:
+                    _LOGGER.debug(f"Cloud report sent: Solar Override: {payload['grid_power_kw']} kW")
         except Exception as e:
             _LOGGER.error(f"Failed to report solar override: {e}")
 
@@ -523,10 +523,10 @@ class PeakGuard:
                 "grid_power_kw": round(grid_w / 1000.0, 2),
                 "limit_kw": round(limit_w / 1000.0, 2)
             }
-            async with aiohttp.ClientSession() as session:
-                async with session.post(api_url, json=payload, timeout=10) as resp:
-                    if resp.status == 200:
-                        _LOGGER.debug(f"Cloud report sent: Solar Override Cleared: {payload['grid_power_kw']} kW")
+            session = async_get_clientsession(self.hass)
+            async with session.post(api_url, json=payload, timeout=10) as resp:
+                if resp.status == 200:
+                    _LOGGER.debug(f"Cloud report sent: Solar Override Cleared: {payload['grid_power_kw']} kW")
         except Exception as e:
             _LOGGER.error(f"Failed to report solar override clear: {e}")
 

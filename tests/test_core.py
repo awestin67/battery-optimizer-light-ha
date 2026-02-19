@@ -27,6 +27,7 @@ sys.modules["homeassistant"] = mock_hass
 sys.modules["homeassistant.core"] = mock_hass
 sys.modules["homeassistant.helpers"] = mock_hass
 sys.modules["homeassistant.helpers.event"] = mock_hass
+sys.modules["homeassistant.helpers.aiohttp_client"] = mock_hass
 sys.modules["homeassistant.exceptions"] = mock_hass
 sys.modules["homeassistant.components"] = mock_hass
 
@@ -381,10 +382,10 @@ async def test_coordinator_sends_solar_override_flag(mock_hass_instance):
     coordinator.peak_guard = peak_guard
 
     # Mocka aiohttp session och response
-    # Vi patchar där den används: custom_components.battery_optimizer_light.coordinator.aiohttp.ClientSession
-    with patch("custom_components.battery_optimizer_light.coordinator.aiohttp.ClientSession") as mock_session_cls:
-        mock_session = mock_session_cls.return_value
-        mock_session.__aenter__.return_value = mock_session
+    # Vi patchar där den används: custom_components.battery_optimizer_light.coordinator.async_get_clientsession
+    with patch("custom_components.battery_optimizer_light.coordinator.async_get_clientsession") as mock_get_session:
+        mock_session = MagicMock()
+        mock_get_session.return_value = mock_session
 
         mock_post = mock_session.post.return_value
         mock_post.__aenter__.return_value = mock_post
