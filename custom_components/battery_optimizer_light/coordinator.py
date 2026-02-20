@@ -15,6 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import logging
+import asyncio
 from datetime import timedelta
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # type: ignore
 from homeassistant.helpers.aiohttp_client import async_get_clientsession # type: ignore
@@ -46,55 +47,63 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Körs var 5:e minut."""
-        try:
-            # 1. Hämta SOC
-            soc = None
-            soc_state = self.hass.states.get(self.soc_entity)
+        # 1. Hämta SOC
+        soc = None
+        soc_state = self.hass.states.get(self.soc_entity)
 
-            # Kontrollera om sensorn är giltig
-            if soc_state and soc_state.state not in ["unknown", "unavailable"]:
+        # Kontrollera om sensorn är giltig
+        if soc_state and soc_state.state not in ["unknown", "unavailable"]:
+            try:
+                soc = float(soc_state.state)
+            except ValueError:
+                raise UpdateFailed(f"SoC value is not a number: {soc_state.state}") from None
+        else:
+            # VIKTIGT: Om sensorn är otillgänglig, avbryt istället för att gissa!
+            # Detta gör att inget skickas till backend denna gång.
+            # Loggar en varning i HA men förstör inte din graf.
+            raise UpdateFailed(f"SoC entity {self.soc_entity} is unavailable. Skipping update.")
+
+        is_solar_override = False
+        if hasattr(self, "peak_guard") and self.peak_guard:
+            is_solar_override = self.peak_guard.is_solar_override
+
+        # 3. Hämta förbrukningsprognos (Valfritt)
+        consumption_forecast = None
+        if self.consumption_forecast_entity:
+            forecast_state = self.hass.states.get(self.consumption_forecast_entity)
+            if forecast_state and forecast_state.state not in ["unknown", "unavailable"]:
                 try:
-                    soc = float(soc_state.state)
+                    consumption_forecast = float(forecast_state.state)
                 except ValueError:
-                    raise UpdateFailed(f"SoC value is not a number: {soc_state.state}") from None
-            else:
-                # VIKTIGT: Om sensorn är otillgänglig, avbryt istället för att gissa!
-                # Detta gör att inget skickas till backend denna gång.
-                # Loggar en varning i HA men förstör inte din graf.
-                raise UpdateFailed(f"SoC entity {self.soc_entity} is unavailable. Skipping update.")
+                    pass  # Ignorera om värdet inte är ett tal
 
-            is_solar_override = False
-            if hasattr(self, "peak_guard") and self.peak_guard:
-                is_solar_override = self.peak_guard.is_solar_override
+        # 2. Payload (Endast det backend behöver)
+        payload = {
+            "api_key": self.api_key,
+            "soc": soc,
+            "is_solar_override": is_solar_override,
+            "consumption_forecast_kwh": consumption_forecast
+        }
 
-            # 3. Hämta förbrukningsprognos (Valfritt)
-            consumption_forecast = None
-            if self.consumption_forecast_entity:
-                forecast_state = self.hass.states.get(self.consumption_forecast_entity)
-                if forecast_state and forecast_state.state not in ["unknown", "unavailable"]:
-                    try:
-                        consumption_forecast = float(forecast_state.state)
-                    except ValueError:
-                        pass  # Ignorera om värdet inte är ett tal
+        _LOGGER.debug(f"Light-Request: {payload}")
 
-            # 2. Payload (Endast det backend behöver)
-            payload = {
-                "api_key": self.api_key,
-                "soc": soc,
-                "is_solar_override": is_solar_override,
-                "consumption_forecast_kwh": consumption_forecast
-            }
+        # Retry-mekanism (3 försök)
+        session = async_get_clientsession(self.hass)
+        for attempt in range(3):
+            try:
+                async with session.post(self.api_url, json=payload, timeout=10) as response:
+                    if response.status != 200:
+                        text = await response.text()
+                        raise UpdateFailed(f"Server {response.status}: {text}")
 
-            _LOGGER.debug(f"Light-Request: {payload}")
+                    return await response.json()
 
-            session = async_get_clientsession(self.hass)
-            async with session.post(self.api_url, json=payload, timeout=10) as response:
-                if response.status != 200:
-                    text = await response.text()
-                    raise UpdateFailed(f"Server {response.status}: {text}")
-
-                return await response.json()
-
-        except Exception as err:
-            _LOGGER.error(f"Light-Error: {err}")
-            raise UpdateFailed(f"Connection error: {err}") from err
+            except UpdateFailed:
+                raise  # Vid serverfel (t.ex. 401/500) avbryter vi direkt
+            except Exception as err:
+                if attempt < 2:
+                    _LOGGER.warning(f"Connection attempt {attempt + 1} failed: {err}. Retrying in 5s...")
+                    await asyncio.sleep(5)
+                else:
+                    _LOGGER.error(f"Light-Error: {err}")
+                    raise UpdateFailed(f"Connection error after 3 attempts: {err}") from err
