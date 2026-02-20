@@ -91,16 +91,21 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
         session = async_get_clientsession(self.hass)
         for attempt in range(3):
             try:
-                async with session.post(self.api_url, json=payload, timeout=10) as response:
+                async with session.post(self.api_url, json=payload, timeout=20) as response:
+                    if response.status == 401:
+                        text = await response.text()
+                        raise UpdateFailed(f"Authentication failed: {text}")
+
                     if response.status != 200:
                         text = await response.text()
                         raise UpdateFailed(f"Server {response.status}: {text}")
 
                     return await response.json()
 
-            except UpdateFailed:
-                raise  # Vid serverfel (t.ex. 401/500) avbryter vi direkt
             except Exception as err:
+                if isinstance(err, UpdateFailed) and "Authentication failed" in str(err):
+                    raise
+
                 if attempt < 2:
                     _LOGGER.warning(f"Connection attempt {attempt + 1} failed: {err}. Retrying in 5s...")
                     await asyncio.sleep(5)
