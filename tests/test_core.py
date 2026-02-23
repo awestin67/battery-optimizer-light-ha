@@ -668,3 +668,41 @@ async def test_peak_guard_throttles_charge(mock_hass_instance):
         "sonnen_force_charge",
         service_data={"power": 800}
     )
+
+@pytest.mark.asyncio
+async def test_peak_guard_sticky_solar_override_on_idle(mock_hass_instance):
+    """Krav: Om Solar Override är aktiv och molnet svarar IDLE, ska override ligga kvar."""
+    coordinator = MagicMock()
+    coordinator.data = {"action": "IDLE"} # Molnet svarar IDLE (Auto)
+
+    guard = PeakGuard(mock_hass_instance, MOCK_CONFIG, coordinator)
+
+    # Simulera att vi redan är i Solar Override
+    guard._is_solar_override = True
+
+    # Setup sensorer
+    limit_state = MagicMock()
+    limit_state.state = "5.0"
+    soc_state = MagicMock()
+    soc_state.state = "50"
+
+    # Last: -200 W (Export, men inte tillräckligt för att trigga nytt (-400),
+    # men tillräckligt för att ligga kvar (< -100)).
+    load_state = MagicMock()
+    load_state.state = "-200"
+
+    def get_state_side_effect(entity_id):
+        if entity_id == "sensor.optimizer_light_peak_limit":
+            return limit_state
+        if entity_id == "sensor.husets_netto_last_virtuell":
+            return load_state
+        if entity_id == "sensor.soc":
+            return soc_state
+        return None
+    mock_hass_instance.states.get.side_effect = get_state_side_effect
+
+    # Kör update
+    await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
+
+    # Verifiera att override ligger kvar (Sticky)
+    assert guard.is_solar_override is True

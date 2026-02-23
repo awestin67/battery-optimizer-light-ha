@@ -373,14 +373,25 @@ class PeakGuard:
                 # Trigger: -400W (Export) | Reset: -100W (Minskad export)
                 SOLAR_TRIGGER = -400.0
                 SOLAR_RESET = -100.0
-                new_override = self._is_solar_override
+
+                # Beräkna önskat läge baserat på last (oberoende av moln-status)
+                wants_override = self._is_solar_override
+                if current_load < SOLAR_TRIGGER:
+                    wants_override = True
+                elif current_load > SOLAR_RESET:
+                    wants_override = False
+
+                new_override = False
 
                 if cloud_action == "HOLD":
-                    if current_load < SOLAR_TRIGGER:
-                        new_override = True
-                    elif current_load > SOLAR_RESET:
-                        new_override = False
+                    new_override = wants_override
+                elif cloud_action == "IDLE":
+                    # Om vi redan är i override, stanna kvar där för att undvika
+                    # att backend pendlar mellan HOLD och IDLE när flaggan skickas.
+                    if self._is_solar_override:
+                        new_override = wants_override
                 else:
+                    # CHARGE / DISCHARGE
                     new_override = False
 
                 if new_override:
