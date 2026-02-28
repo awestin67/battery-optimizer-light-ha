@@ -18,7 +18,7 @@ Den kombinerar **Moln-intelligens** (för prisoptimering och statistik) med **Lo
     * **Hysteres:** Startar urladdning direkt vid topp, men slutar först när lasten sjunkit rejält (1000W) under gränsen för att undvika "fladder".
     * **Rapportering:** Skickar statistik till molnet (max 1 gång per topp).
 * **⛄ Vinterbuffert:** Sparar en valfri % av batteriet som *aldrig* säljs, utan sparas för nödlägen.
-* **📊 Statistik:** Se "Top 3" effekttoppar och besparingshistorik i en snygg Web Dashboard.
+* **📊 Statistik:** Se "Top 3" effekttoppar och besparingshistorik i en snygg [Web Dashboard](https://battery-prod.awestinconsulting.se).
 
 ---
 
@@ -62,7 +62,7 @@ Du behöver veta namnet på följande sensorer i din Home Assistant:
 2. Klicka **+ Lägg till integration** -> Sök efter **Battery Optimizer Light**.
 3. Fyll i uppgifterna:
     * **API URL:** (Låt stå kvar standardvärdet).
-    * **API Key:** Din nyckel från Web Dashboarden.
+    * **API Key:** Din nyckel från [Web Dashboarden](https://battery-prod.awestinconsulting.se).
     * **SoC Sensor:** Välj din batterisensor (%).
     * **Grid Sensor:** Välj sensorn som mäter husets huvudsäkring/nät (W).
     * **Invertera Grid Sensor:** Kryssa i om din mätare visar positivt värde vid export (försäljning).
