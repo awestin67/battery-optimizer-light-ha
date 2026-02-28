@@ -49,8 +49,8 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     # --- MIGRERING: Byt ut gammal dev-url mot production ---
     # Detta fixar problemet för befintliga användare som har kvar den gamla URL:en
     current_url = config.get(CONF_API_URL, "")
-    if "battery-light-development" in current_url:
-        _LOGGER.warning("⚠️ Migrerar API URL från Development till Production...")
+    if "battery-light-development" in current_url or "battery-light-production.up.railway.app" in current_url:
+        _LOGGER.warning("⚠️ Migrerar API URL till ny Production URL...")
         new_data = dict(config)
         new_data[CONF_API_URL] = DEFAULT_API_URL
         hass.config_entries.async_update_entry(entry, data=new_data)

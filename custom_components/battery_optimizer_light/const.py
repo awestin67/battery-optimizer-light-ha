@@ -31,5 +31,5 @@ CONF_BATTERY_STATUS_KEYWORDS = "battery_status_keywords" # Nyckelord för underh
 CONF_VIRTUAL_LOAD_SENSOR = "virtual_load_sensor" # Virtuell last (Husets netto utan batteri)
 CONF_CONSUMPTION_FORECAST_SENSOR = "consumption_forecast_sensor" # Prognos för morgondagens förbrukning (kWh)
 
-DEFAULT_API_URL = "https://battery-light-production.up.railway.app"
+DEFAULT_API_URL = "https://battery-prod.awestinconsulting.se"
 DEFAULT_BATTERY_STATUS_KEYWORDS = "battery_care, puls_orange, calibration, firmware_update, solid_red, warning_internet"
