@@ -374,9 +374,25 @@ class PeakGuard:
                 SOLAR_TRIGGER = -400.0
                 SOLAR_RESET = -100.0
 
+                # Hämta batteriets effekt för att undvika falsk triggning (t.ex. på natten)
+                # Om batteriet laddar ur (positivt värde > 200W) är det batteriet som skapar exporten, inte solen.
+                current_bat_power = 0.0
+                bat_entity = self.config.get(CONF_BATTERY_POWER_SENSOR)
+                if bat_entity:
+                    b_state = self.hass.states.get(bat_entity)
+                    if b_state and b_state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
+                        try:
+                            current_bat_power = float(b_state.state)
+                        except ValueError:
+                            pass
+
                 # Beräkna önskat läge baserat på last (oberoende av moln-status)
                 wants_override = self._is_solar_override
-                if current_load < SOLAR_TRIGGER:
+                # SÄKERHET: Om batteriet laddar ur (>200W) är det batteriet som skapar exporten, inte solen.
+                # Vi tillåter laddning (negativt värde) eftersom det är förväntat vid Solar Override.
+                if current_bat_power > 200:
+                    wants_override = False
+                elif current_load < SOLAR_TRIGGER and current_bat_power < 200:
                     wants_override = True
                 elif current_load > SOLAR_RESET:
                     wants_override = False
