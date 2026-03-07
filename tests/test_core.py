@@ -28,6 +28,7 @@ sys.modules["homeassistant.core"] = mock_hass
 sys.modules["homeassistant.helpers"] = mock_hass
 sys.modules["homeassistant.helpers.event"] = mock_hass
 sys.modules["homeassistant.helpers.aiohttp_client"] = mock_hass
+sys.modules["homeassistant.helpers.entity"] = mock_hass
 sys.modules["homeassistant.exceptions"] = mock_hass
 sys.modules["homeassistant.components"] = mock_hass
 

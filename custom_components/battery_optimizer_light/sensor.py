@@ -19,8 +19,9 @@ from homeassistant.components.sensor import ( # type: ignore
     SensorDeviceClass,
     SensorStateClass,
 )
+from homeassistant.helpers.entity import DeviceInfo # type: ignore
 from homeassistant.helpers.update_coordinator import CoordinatorEntity # type: ignore
-from homeassistant.const import STATE_UNKNOWN, STATE_UNAVAILABLE # type: ignore
+from homeassistant.const import STATE_UNKNOWN, STATE_UNAVAILABLE, EntityCategory # type: ignore
 from .const import (
     DOMAIN,
     CONF_GRID_SENSOR,
@@ -39,10 +40,24 @@ async def async_setup_entry(hass, entry, async_add_entities):
         BatteryLightBufferSensor(coordinator),
         BatteryLightPeakSensor(coordinator),
         BatteryLightStatusSensor(coordinator),
-        BatteryLightVirtualLoadSensor(coordinator)
+        BatteryLightVirtualLoadSensor(coordinator),
+        BatteryLightChargeTargetSensor(coordinator),
+        BatteryLightDischargeTargetSensor(coordinator),
     ])
 
-class BatteryLightActionSensor(CoordinatorEntity, SensorEntity):
+class BatteryOptimizerSensorBase(CoordinatorEntity, SensorEntity):
+    """Gemensam basklass för att gruppera sensorer under en Device."""
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.coordinator.api_key)},
+            name="Battery Optimizer Light",
+            manufacturer="Awestin Consulting",
+            model="Cloud Optimizer",
+            configuration_url="https://battery-prod.awestinconsulting.se",
+        )
+
+class BatteryLightActionSensor(BatteryOptimizerSensorBase):
     def __init__(self, coordinator):
         super().__init__(coordinator)
         self._attr_name = "Optimizer Light Action"
@@ -59,7 +74,7 @@ class BatteryLightActionSensor(CoordinatorEntity, SensorEntity):
                 return "IDLE"
         return raw_action
 
-class BatteryLightPowerSensor(CoordinatorEntity, SensorEntity):
+class BatteryLightPowerSensor(BatteryOptimizerSensorBase):
     def __init__(self, coordinator):
         super().__init__(coordinator)
         self._attr_name = "Optimizer Light Power"
@@ -76,12 +91,13 @@ class BatteryLightPowerSensor(CoordinatorEntity, SensorEntity):
     def state(self):
         return (self.coordinator.data or {}).get("target_power_kw", 0.0)
 
-class BatteryLightReasonSensor(CoordinatorEntity, SensorEntity):
+class BatteryLightReasonSensor(BatteryOptimizerSensorBase):
     def __init__(self, coordinator):
         super().__init__(coordinator)
         self._attr_name = "Optimizer Light Reason"
         self._attr_unique_id = f"{coordinator.api_key}_light_reason"
         self._attr_icon = "mdi:text-box-outline"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
     def state(self):
@@ -97,7 +113,7 @@ class BatteryLightReasonSensor(CoordinatorEntity, SensorEntity):
         # 2. Annars visa vad molnet säger (t.ex. "Charging due to cheap price")
         return (self.coordinator.data or {}).get("reason", "Unknown")
 
-class BatteryLightBufferSensor(CoordinatorEntity, SensorEntity):
+class BatteryLightBufferSensor(BatteryOptimizerSensorBase):
     def __init__(self, coordinator):
         super().__init__(coordinator)
         self._attr_name = "Optimizer Light Buffer Target"
@@ -113,7 +129,7 @@ class BatteryLightBufferSensor(CoordinatorEntity, SensorEntity):
         # Hämtar 'min_soc_buffer' från backend JSON. Default 0.0 om det saknas.
         return (self.coordinator.data or {}).get("min_soc_buffer", 0.0)
 
-class BatteryLightPeakSensor(CoordinatorEntity, SensorEntity):
+class BatteryLightPeakSensor(BatteryOptimizerSensorBase):
     def __init__(self, coordinator):
         super().__init__(coordinator)
         self._attr_name = "Optimizer Light Peak Limit"
@@ -127,11 +143,12 @@ class BatteryLightPeakSensor(CoordinatorEntity, SensorEntity):
         # Hämta värdet från backend. Default 12.0 (högt) om det saknas för att inte trigga i onödan.
         return (self.coordinator.data or {}).get("peak_power_kw", 12.0)
 
-class BatteryLightStatusSensor(CoordinatorEntity, SensorEntity):
+class BatteryLightStatusSensor(BatteryOptimizerSensorBase):
     def __init__(self, coordinator):
         super().__init__(coordinator)
         self._attr_name = "Optimizer Light PeakGuard Status"
         self._attr_unique_id = f"{coordinator.api_key}_peakguard_status"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
     def state(self):
@@ -189,6 +206,16 @@ class BatteryLightVirtualLoadSensor(SensorEntity):
         self._attr_icon = "mdi:home-lightning-bolt-outline"
 
     @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.coordinator.api_key)},
+            name="Battery Optimizer Light",
+            manufacturer="Awestin Consulting",
+            model="Cloud Optimizer",
+            configuration_url="https://battery-prod.awestinconsulting.se",
+        )
+
+    @property
     def state(self):
         if not hasattr(self.coordinator, "peak_guard"):
             return None
@@ -235,3 +262,43 @@ class BatteryLightVirtualLoadSensor(SensorEntity):
             grid_val = -grid_val
 
         return int(grid_val + bat_val)
+
+class BatteryLightChargeTargetSensor(BatteryOptimizerSensorBase):
+    """Sensor som visar önskad laddningseffekt i Watt (för styrning)."""
+    def __init__(self, coordinator):
+        super().__init__(coordinator)
+        self._attr_name = "Optimizer Light Charge Target"
+        self._attr_unique_id = f"{coordinator.api_key}_light_charge_target"
+        self._attr_unit_of_measurement = "W"
+        self._attr_device_class = SensorDeviceClass.POWER
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:battery-arrow-up"
+
+    @property
+    def state(self):
+        data = self.coordinator.data or {}
+        action = data.get("action", "IDLE")
+        if action == "CHARGE":
+            kw = data.get("target_power_kw", 0.0)
+            return int(kw * 1000)
+        return 0
+
+class BatteryLightDischargeTargetSensor(BatteryOptimizerSensorBase):
+    """Sensor som visar önskad urladdningseffekt i Watt (för styrning)."""
+    def __init__(self, coordinator):
+        super().__init__(coordinator)
+        self._attr_name = "Optimizer Light Discharge Target"
+        self._attr_unique_id = f"{coordinator.api_key}_light_discharge_target"
+        self._attr_unit_of_measurement = "W"
+        self._attr_device_class = SensorDeviceClass.POWER
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:battery-arrow-down"
+
+    @property
+    def state(self):
+        data = self.coordinator.data or {}
+        action = data.get("action", "IDLE")
+        if action == "DISCHARGE":
+            kw = data.get("target_power_kw", 0.0)
+            return int(kw * 1000)
+        return 0

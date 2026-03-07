@@ -114,6 +114,15 @@ Du behöver veta namnet på följande sensorer i din Home Assistant:
     * **Maintenance Keywords:** (Valfritt) Kommaseparerad lista med ord som pausar styrningen (t.ex. `battery_care, error`).
     * **Virtual Load Sensor:** (Valfritt) Lämna tomt för automatisk beräkning.
     * **Consumption Forecast Sensor:** (Valfritt) Välj sensorn som visar prognos för morgondagens förbrukning (kWh).
+    
+  ## ℹ️ Tillgängliga Sensorer
+  Integrationen skapar följande sensorer som underlättar styrning och övervakning:
+  * **sensor.optimizer_light_action**: Aktuellt styrbeslut (CHARGE, DISCHARGE, HOLD, IDLE).
+  * **sensor.optimizer_light_charge_target**: Önskad laddningseffekt i Watt (0 W om ej laddning). 
+  * **sensor.optimizer_light_discharge_target**: Önskad urladdningseffekt i Watt (0 W om ej urladdning). 
+  * **sensor.optimizer_light_peakguard_status**: Status för effektvakten (t.ex. Monitoring, Triggered). 
+  * **sensor.optimizer_light_peak_limit**: Den effektgräns (W) som effektvakten bevakar.
+  * **sensor.optimizer_light_virtual_load**: Beräknad nettolast för huset (W). Skapas automatiskt om ingen "Virtual Load Sensor" anges i konfigurationen.
 
 ### 💡 Tips: Detektera Underhåll (Battery Care)
 För att systemet ska pausa automatiskt när batteriet kalibreras (Battery Care) eller tappar internet, skapa en sensor som läser `Eclipse Status`.
