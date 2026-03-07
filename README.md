@@ -24,13 +24,56 @@ Den kombinerar **Moln-intelligens** (för prisoptimering och statistik) med **Lo
 
 ## 🛠️ Förberedelser (Krav)
 
-### 1. Skript
-För att systemet ska kunna styra ditt batteri (t.ex. ett Sonnen) måste du ha dessa skript i Home Assistant:
+### 1. Konfiguration av REST Commands (configuration.yaml)
+För att Home Assistant ska kunna styra ditt Sonnen-batteri behöver du lägga till följande i din `configuration.yaml`.
+Ersätt `<DIN_BATTERI_IP>` och `<DIN_AUTH_TOKEN>` med dina specifika uppgifter.
+
+```yaml
+rest_command:
+  # 1. Sätt batteriet i manuellt läge (OperatingMode = 1)
+  sonnen_set_manual:
+    url: "http://<DIN_BATTERI_IP>/api/v2/configurations"
+    method: PUT
+    headers:
+      Auth-Token: "<DIN_AUTH_TOKEN>"
+      Content-Type: application/json
+    payload: '{"EM_OperatingMode": 1}'
+
+  # 2. Sätt batteriet i autoläge (OperatingMode = 2)
+  sonnen_set_auto:
+    url: "http://<DIN_BATTERI_IP>/api/v2/configurations"
+    method: PUT
+    headers:
+      Auth-Token: "<DIN_AUTH_TOKEN>"
+      Content-Type: application/json
+    payload: '{"EM_OperatingMode": 2}'
+
+  # 3. Skicka ladd-kommando (Watt) - Används även för HOLD (0 Watt)
+  sonnen_charge:
+    url: "http://<DIN_BATTERI_IP>/api/v2/setpoint/charge/{{ power }}"
+    method: POST
+    headers:
+      Auth-Token: "<DIN_AUTH_TOKEN>"
+      Content-Type: application/json
+    payload: '{}'
+
+  # 4. Skicka urladdnings-kommando (Watt)
+  sonnen_discharge:
+    url: "http://<DIN_BATTERI_IP>/api/v2/setpoint/discharge/{{ power }}"
+    method: POST
+    headers:
+      Auth-Token: "<DIN_AUTH_TOKEN>"
+      Content-Type: application/json
+    payload: '{}'
+```
+
+### 2. Skript
+För att systemet ska kunna styra ditt batteri (t.ex. ett Sonnen) måste du ha dessa skript i Home Assistant (som anropar REST-kommandona ovan):
 * `script.sonnen_set_auto_mode` (Motsvarar self-consumption)
 * `script.sonnen_force_charge` (Måste acceptera `power` som variabel)
 * `script.sonnen_force_discharge` (Måste acceptera `power` som variabel)
 
-### 2. Sensorer
+### 3. Sensorer
 Du behöver veta namnet på följande sensorer i din Home Assistant:
 * **Batteri SoC:** (t.ex. `sensor.sonnen_usoc`)
 * **Batteri Effekt:** (t.ex. `sensor.sonnen_battery_power_w`) – Används i automationen.
