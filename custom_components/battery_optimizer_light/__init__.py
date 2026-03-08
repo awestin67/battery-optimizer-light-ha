@@ -433,7 +433,7 @@ class PeakGuard:
                     self._hold_command_sent = False  # Återställ om molnet vill något annat
 
                 if cloud_action == "CHARGE":
-                    # SÄKERHET: Kontrollera att vi inte laddar sönder säkringen
+                    # Kontrollera att laddning inte överskrider gränsvärdet
                     target_kw = 0.0
                     if self.coordinator.data and "target_power_kw" in self.coordinator.data:
                         target_kw = float(self.coordinator.data.get("target_power_kw", 0.0))

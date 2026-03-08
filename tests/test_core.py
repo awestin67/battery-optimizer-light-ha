@@ -709,3 +709,40 @@ async def test_peak_guard_sticky_solar_override_on_idle(mock_hass_instance):
 
     # Verifiera att override ligger kvar (Sticky)
     assert guard.is_solar_override is True
+
+@pytest.mark.asyncio
+async def test_peak_guard_handles_high_export_as_solar_override(mock_hass_instance):
+    """Krav: Vid hög export ska Solar Override aktiveras (inte blockeras)."""
+    coordinator = MagicMock()
+    coordinator.data = {"action": "HOLD"}
+
+    guard = PeakGuard(mock_hass_instance, MOCK_CONFIG, coordinator)
+
+    # Setup sensorer
+    limit_state = MagicMock()
+    limit_state.state = "5.0" # 5000W limit
+
+    # Last: -6000 W (Export > Limit)
+    load_state = MagicMock()
+    load_state.state = "-6000"
+
+    soc_state = MagicMock()
+    soc_state.state = "50"
+
+    def get_state_side_effect(entity_id):
+        if entity_id == "sensor.optimizer_light_peak_limit":
+            return limit_state
+        if entity_id == "sensor.husets_netto_last_virtuell":
+            return load_state
+        if entity_id == "sensor.soc":
+            return soc_state
+        return None
+    mock_hass_instance.states.get.side_effect = get_state_side_effect
+
+    # Kör update
+    await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
+
+    # Verifiera att PeakGuard INTE är aktiv (ingen urladdning)
+    assert guard.is_active is False
+    # Verifiera att Solar Override ÄR aktiv (tillåt laddning)
+    assert guard.is_solar_override is True
