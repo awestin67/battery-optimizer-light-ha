@@ -21,6 +21,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, CoreState # type: ign
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN # type: ignore
 from homeassistant.helpers.event import async_track_state_change_event # type: ignore
 from homeassistant.helpers.aiohttp_client import async_get_clientsession # type: ignore
+from homeassistant.loader import async_get_integration # type: ignore
 from .coordinator import BatteryOptimizerLightCoordinator
 from .const import (
     DOMAIN,
@@ -56,7 +57,10 @@ async def async_setup_entry(hass: HomeAssistant, entry):
         hass.config_entries.async_update_entry(entry, data=new_data)
         config = new_data  # Uppdatera variabeln så coordinatorn får rätt URL direkt
 
-    coordinator = BatteryOptimizerLightCoordinator(hass, config)
+    integration = await async_get_integration(hass, DOMAIN)
+    version = str(integration.version)
+
+    coordinator = BatteryOptimizerLightCoordinator(hass, config, version)
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})
@@ -169,6 +173,9 @@ class PeakGuard:
                 if self.is_active:
                     self._set_reported_state(False)
                 return
+            # Om Peak Shaving är inaktiverat, avbryt eventuell pågående peak-hantering
+            if not is_active and self.is_active:
+                self._set_reported_state(False)
 
             # 0.1 Kontrollera Batteristatus (Maintenance/Full Charge)
             status_entity = self.config.get(CONF_BATTERY_STATUS_SENSOR)
@@ -324,7 +331,7 @@ class PeakGuard:
             # --- NY LOGIK MED HYSTERES ---
 
             # Steg 1: Bestäm tillstånd (På / Av)
-            if not self._has_reported and current_load > limit_w and soc > 0:
+            if is_active and not self._has_reported and current_load > limit_w and soc > 0:
                 _LOGGER.info(f"🚨 PEAK DETECTED! Load: {current_load} W > Limit: {limit_w} W. Engaging battery.")
                 self._set_reported_state(True)
                 await self._report_peak(current_load, limit_w)

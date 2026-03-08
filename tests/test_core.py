@@ -31,6 +31,7 @@ sys.modules["homeassistant.helpers.aiohttp_client"] = mock_hass
 sys.modules["homeassistant.helpers.entity"] = mock_hass
 sys.modules["homeassistant.exceptions"] = mock_hass
 sys.modules["homeassistant.components"] = mock_hass
+sys.modules["homeassistant.loader"] = mock_hass
 
 mock_util = MagicMock()
 sys.modules["homeassistant.util"] = mock_util
@@ -370,7 +371,7 @@ async def test_solar_override_reports_to_cloud(mock_hass_instance):
 @pytest.mark.asyncio
 async def test_coordinator_sends_solar_override_flag(mock_hass_instance):
     """Krav: Coordinator ska skicka med is_solar_override flaggan till backend."""
-    coordinator = BatteryOptimizerLightCoordinator(mock_hass_instance, MOCK_CONFIG)
+    coordinator = BatteryOptimizerLightCoordinator(mock_hass_instance, MOCK_CONFIG, version="1.2.3")
 
     # Mocka SoC state
     mock_state = MagicMock()
@@ -402,6 +403,7 @@ async def test_coordinator_sends_solar_override_flag(mock_hass_instance):
 
         assert payload["is_solar_override"] is True
         assert payload["soc"] == 50.0
+        assert payload["ha_version"] == "1.2.3"
 
 @pytest.mark.asyncio
 async def test_peak_guard_calculates_load_with_inverted_grid(mock_hass_instance):

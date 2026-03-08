@@ -25,7 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
     """Hanterar kommunikationen för Light-versionen."""
 
-    def __init__(self, hass, config):
+    def __init__(self, hass, config, version="0.0.0"):
         super().__init__(
             hass,
             _LOGGER,
@@ -34,6 +34,7 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
         )
         self.api_url = f"{config['api_url'].rstrip('/')}/signal"
         self.api_key = config['api_key']
+        self.version = version
 
         # --- DEV OVERRIDE (Avkommentera vid lokal utveckling) ---
         # self.api_url = "https://battery-light-development.up.railway.app/signal"
@@ -82,7 +83,8 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
             "api_key": self.api_key,
             "soc": soc,
             "is_solar_override": is_solar_override,
-            "consumption_forecast_kwh": consumption_forecast
+            "consumption_forecast_kwh": consumption_forecast,
+            "ha_version": self.version
         }
 
         _LOGGER.debug(f"Light-Request: {payload}")
