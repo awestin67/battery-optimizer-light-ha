@@ -261,7 +261,7 @@ class BatteryLightVirtualLoadSensor(SensorEntity):
         if invert_grid:
             grid_val = -grid_val
 
-        return int(grid_val + bat_val)
+        return float(grid_val + bat_val)
 
 class BatteryLightChargeTargetSensor(BatteryOptimizerSensorBase):
     """Sensor som visar önskad laddningseffekt i Watt (för styrning)."""

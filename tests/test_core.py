@@ -746,3 +746,63 @@ async def test_peak_guard_handles_high_export_as_solar_override(mock_hass_instan
     assert guard.is_active is False
     # Verifiera att Solar Override ÄR aktiv (tillåt laddning)
     assert guard.is_solar_override is True
+
+@pytest.mark.asyncio
+async def test_peak_guard_prevents_solar_override_during_buffer_fill_lag(mock_hass_instance):
+    """
+    Krav: När batteriet laddas från nätet (Buffer Fill) kan sensor-lag göra att
+    vi ser en falsk export (Grid sjunker innan Batteri hinner rapportera lasten).
+
+    Scenario:
+    - Batteri laddar 3000W (Visas som -3000W).
+    - Grid levererar 3000W, men laggar och visar bara 2500W Import just nu.
+    - Virtuell last = 2500 + (-3000) = -500W.
+    - -500W < -400W (Solar Trigger).
+
+    Utan fixen hade detta aktiverat Solar Override.
+    Med fixen ska vi se att Grid Import > 100W och blockera det.
+    """
+    coordinator = MagicMock()
+    coordinator.data = {"action": "HOLD"} # Molnet säger HOLD (Buffer Fill active)
+
+    guard = PeakGuard(mock_hass_instance, MOCK_CONFIG, coordinator)
+
+    # Setup sensorer
+    limit_state = MagicMock()
+    limit_state.state = "5.0"
+
+    soc_state = MagicMock()
+    soc_state.state = "15" # Låg SoC, därför vi buffrar
+
+    # Grid: 2500 W Import (Positivt). > 100W spärren.
+    grid_state = MagicMock()
+    grid_state.state = "2500"
+
+    # Batteri: -3000 W (Laddar)
+    bat_state = MagicMock()
+    bat_state.state = "-3000"
+
+    # Virtuell Last: -500 W (Falsk export pga lag)
+    load_state = MagicMock()
+    load_state.state = "-500"
+
+    def get_state_side_effect(entity_id):
+        if entity_id == "sensor.optimizer_light_peak_limit":
+            return limit_state
+        if entity_id == "sensor.grid":
+            return grid_state
+        if entity_id == "sensor.bat_power":
+            return bat_state
+        if entity_id == "sensor.husets_netto_last_virtuell":
+            return load_state
+        if entity_id == "sensor.soc":
+            return soc_state
+        return None
+    mock_hass_instance.states.get.side_effect = get_state_side_effect
+
+    # Kör update
+    await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
+
+    # Verifiera att Solar Override INTE aktiveras, trots att lasten är -500W
+    # Detta bevisar att "Import-spärren" fungerar.
+    assert guard.is_solar_override is False

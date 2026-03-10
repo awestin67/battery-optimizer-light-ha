@@ -61,7 +61,6 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     version = str(integration.version)
 
     coordinator = BatteryOptimizerLightCoordinator(hass, config, version)
-    await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
@@ -69,6 +68,9 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     # Initiera PeakGuard
     peak_guard = PeakGuard(hass, config, coordinator)
     coordinator.peak_guard = peak_guard
+
+    # Kör första uppdateringen NU, när PeakGuard är kopplad.
+    await coordinator.async_config_entry_first_refresh()
 
     # Hämta virtuell last-sensor från config (kan vara None)
     virtual_load_entity = config.get(CONF_VIRTUAL_LOAD_SENSOR)
@@ -393,6 +395,27 @@ class PeakGuard:
                         except ValueError:
                             pass
 
+                # --- EXTRA SÄKERHETSKONTROLL (Natt/Buffer Fill) ---
+                # Om vi laddar batteriet från nätet (t.ex. Buffer Fill på natten) kan "Virtual Load"
+                # ibland felaktigt visa negativt värde pga fördröjning i sensorer
+                # (Grid visar mindre import än Batteriets laddning).
+                # Därför kontrollerar vi explicit Grid-sensorn: Om vi IMPORTERAR el (>100W) är det INTE sol-överskott.
+                is_physically_exporting = True
+                grid_id = self.config.get(CONF_GRID_SENSOR)
+                if grid_id:
+                    g_state = self.hass.states.get(grid_id)
+                    if g_state and g_state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE]:
+                        try:
+                            g_val = float(g_state.state)
+                            if self.config.get(CONF_GRID_SENSOR_INVERT, False):
+                                g_val = -g_val
+
+                            # Om importen är större än 100W, blockera Solar Override
+                            if g_val > 100:
+                                is_physically_exporting = False
+                        except ValueError:
+                            pass
+
                 # Beräkna önskat läge baserat på last (oberoende av moln-status)
                 wants_override = self._is_solar_override
                 # SÄKERHET: Om batteriet laddar ur (>200W) är det batteriet som skapar exporten, inte solen.
@@ -400,7 +423,8 @@ class PeakGuard:
                 if current_bat_power > 200:
                     wants_override = False
                 elif current_load < SOLAR_TRIGGER and current_bat_power < 200:
-                    wants_override = True
+                    # KRÄV att vi faktiskt exporterar fysiskt (eller att grid-sensor saknas)
+                    wants_override = is_physically_exporting
                 elif current_load > SOLAR_RESET:
                     wants_override = False
 
