@@ -1,5 +1,7 @@
 # 🔋 Battery Optimizer Light (Home Assistant Integration)
 
+<img src="https://raw.githubusercontent.com/awestin67/battery-optimizer-light-ha/main/custom_components/battery_optimizer_light/logo.png" alt="Logo" width="200"/>
+
 ![Validate and Test](https://github.com/awestin67/battery-optimizer-light-ha/actions/workflows/run_tests.yml/badge.svg)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -10,6 +12,13 @@ Den kombinerar **Moln-intelligens** (för prisoptimering och statistik) med **Lo
 
 ---
 
+## 🔌 Förenklad setup med "Battery Optimizer Light Sonnen"
+
+Äger du ett Sonnen-batteri? Vi rekommenderar att du använder kompletterings-integrationen **[Battery Optimizer Light Sonnen](https://github.com/awestin67/battery-optimizer-light-sonnen)**.
+
+Den ersätter behovet av manuella `rest_command` och `script` i din `configuration.yaml` och ger dig direkta sensorer och tjänster för styrning.
+
+---
 ## ✨ Funktioner
 
 * **📈 Prisoptimering (Arbitrage):** Laddar billigt, säljer dyrt baserat på spotpris och prognos.
@@ -72,6 +81,38 @@ För att systemet ska kunna styra ditt batteri (t.ex. ett Sonnen) måste du ha d
 * `script.sonnen_set_auto_mode` (Motsvarar self-consumption)
 * `script.sonnen_force_charge` (Måste acceptera `power` som variabel)
 * `script.sonnen_force_discharge` (Måste acceptera `power` som variabel)
+
+```yaml 
+alias: "Sonnen: Autoläge"
+sequence:
+  - action: rest_command.sonnen_set_auto
+
+alias: "Sonnen: Tvinga Laddning"
+fields:
+  power:
+    description: Effekt i Watt
+    default: 0
+sequence:
+  - action: rest_command.sonnen_set_manual
+  - delay:
+      milliseconds: 500
+  - data:
+      power: "{{ power }}"
+    action: rest_command.sonnen_charge
+
+alias: "Sonnen: Tvinga Urladdning"
+fields:
+  power:
+    description: Effekt i Watt
+    default: 0
+sequence:
+  - action: rest_command.sonnen_set_manual
+  - delay:
+      milliseconds: 500
+  - data:
+      power: "{{ power }}"
+    action: rest_command.sonnen_discharge
+``` 
 
 ### 3. Sensorer
 Du behöver veta namnet på följande sensorer i din Home Assistant:
