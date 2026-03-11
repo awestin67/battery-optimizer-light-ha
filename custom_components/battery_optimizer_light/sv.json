@@ -1,0 +1,50 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Konfigurera Battery Optimizer Light",
+                "description": "Koppla din Home Assistant till molntjänsten för smart batteristyrning.\n\nFyll i din API-nyckel och peka ut dina sensorer.",
+                "data": {
+                    "api_url": "API URL",
+                    "api_key": "API Nyckel (från Dashboard)",
+                    "soc_sensor": "Batteri SoC Sensor (%)",
+                    "grid_sensor": "Grid Sensor (W) - Husets totala effekt",
+                    "grid_sensor_invert": "Invertera Grid Sensor? (Välj om positivt värde = Export)",
+                    "battery_power_sensor": "Batteri Effekt Sensor (W)",
+                    "battery_status_sensor": "Batteri Status Sensor (Valfritt)",
+                    "battery_status_keywords": "Nyckelord för underhåll (t.ex. Battery-Care, Service)",
+                    "virtual_load_sensor": "Virtuell Last Sensor (Valfritt - Ersätter Grid+Batteri beräkning)",
+                    "consumption_forecast_sensor": "Förbrukningsprognos imorgon (kWh) (Valfritt)"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Kunde inte ansluta till servern.",
+            "invalid_auth": "Ogiltig API-nyckel.",
+            "unknown": "Ett okänt fel inträffade."
+        },
+        "abort": {
+            "already_configured": "Enheten är redan konfigurerad."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Inställningar",
+                "description": "Ändra sensorer eller inställningar för Battery Optimizer Light.",
+                "data": {
+                    "api_url": "API URL",
+                    "api_key": "API Nyckel",
+                    "soc_sensor": "Batteri SoC (%)",
+                    "grid_sensor": "Grid Sensor (W)",
+                    "grid_sensor_invert": "Invertera Grid Sensor",
+                    "battery_power_sensor": "Batteri Effekt (W)",
+                    "battery_status_sensor": "Batteri Status Sensor",
+                    "battery_status_keywords": "Nyckelord för underhåll (komma-separerad)",
+                    "virtual_load_sensor": "Virtuell Last Sensor",
+                    "consumption_forecast_sensor": "Förbrukningsprognos (kWh)"
+                }
+            }
+        }
+    }
+}

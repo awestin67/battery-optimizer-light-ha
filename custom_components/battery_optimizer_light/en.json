@@ -1,0 +1,50 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Battery Optimizer Light Setup",
+                "description": "Connect Home Assistant to the cloud optimizer service.\n\nEnter your API key and select your sensors below.",
+                "data": {
+                    "api_url": "API URL",
+                    "api_key": "API Key (from Dashboard)",
+                    "soc_sensor": "Battery SoC Sensor (%)",
+                    "grid_sensor": "Grid Sensor (W) - Total house power",
+                    "grid_sensor_invert": "Invert Grid Sensor? (Check if positive value = Export)",
+                    "battery_power_sensor": "Battery Power Sensor (W)",
+                    "battery_status_sensor": "Battery Status Sensor (Optional)",
+                    "battery_status_keywords": "Maintenance Keywords (e.g. Battery-Care, Service)",
+                    "virtual_load_sensor": "Virtual Load Sensor (Optional - Overrides calc)",
+                    "consumption_forecast_sensor": "Consumption Forecast Tomorrow (kWh) (Optional)"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Failed to connect to server.",
+            "invalid_auth": "Invalid API Key.",
+            "unknown": "Unexpected error."
+        },
+        "abort": {
+            "already_configured": "Device is already configured."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Settings",
+                "description": "Update sensors and configuration.",
+                "data": {
+                    "api_url": "API URL",
+                    "api_key": "API Key",
+                    "soc_sensor": "Battery SoC (%)",
+                    "grid_sensor": "Grid Sensor (W)",
+                    "grid_sensor_invert": "Invert Grid Sensor",
+                    "battery_power_sensor": "Battery Power Sensor (W)",
+                    "battery_status_sensor": "Battery Status Sensor",
+                    "battery_status_keywords": "Maintenance Keywords",
+                    "virtual_load_sensor": "Virtual Load Sensor",
+                    "consumption_forecast_sensor": "Consumption Forecast (kWh)"
+                }
+            }
+        }
+    }
+}

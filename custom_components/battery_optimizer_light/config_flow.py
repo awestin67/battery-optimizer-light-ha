@@ -103,35 +103,48 @@ class BatteryOptimizerLightOptionsFlow(config_entries.OptionsFlow):
         # Vi läser nuvarande värden direkt från grunddatan
         data = self._config_entry.data
 
+        # Använd self.add_suggested_values_to_schema istället för default=...
+        # Detta fixar problemet att man inte kan tömma valfria fält (t.ex. Grid Sensor).
         schema = vol.Schema({
-            vol.Required(CONF_API_URL, default=data.get(CONF_API_URL, DEFAULT_API_URL)): TextSelector(
+            vol.Required(CONF_API_URL): TextSelector(
                 TextSelectorConfig(type="url")
             ),
-            vol.Required(CONF_API_KEY, default=data.get(CONF_API_KEY, "")): TextSelector(),
-            vol.Required(CONF_SOC_SENSOR, default=data.get(CONF_SOC_SENSOR)): EntitySelector(
+            vol.Required(CONF_API_KEY): TextSelector(),
+            vol.Required(CONF_SOC_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor")
             ),
-            vol.Optional(CONF_GRID_SENSOR, default=data.get(CONF_GRID_SENSOR)): EntitySelector(
+            vol.Optional(CONF_GRID_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
-            vol.Optional(CONF_GRID_SENSOR_INVERT, default=data.get(CONF_GRID_SENSOR_INVERT, False)): bool,
-            vol.Required(CONF_BATTERY_POWER_SENSOR, default=data.get(CONF_BATTERY_POWER_SENSOR)): EntitySelector(
+            vol.Optional(CONF_GRID_SENSOR_INVERT): bool,
+            vol.Required(CONF_BATTERY_POWER_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
-            vol.Optional(CONF_BATTERY_STATUS_SENSOR, default=data.get(CONF_BATTERY_STATUS_SENSOR)): EntitySelector(
+            vol.Optional(CONF_BATTERY_STATUS_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor")
             ),
-            vol.Optional(CONF_BATTERY_STATUS_KEYWORDS, default=data.get(
-                CONF_BATTERY_STATUS_KEYWORDS, DEFAULT_BATTERY_STATUS_KEYWORDS
-            )): TextSelector(TextSelectorConfig(multiline=True)),
-            vol.Optional(CONF_VIRTUAL_LOAD_SENSOR, default=data.get(CONF_VIRTUAL_LOAD_SENSOR)): EntitySelector(
+            vol.Optional(CONF_BATTERY_STATUS_KEYWORDS): TextSelector(TextSelectorConfig(multiline=True)),
+            vol.Optional(CONF_VIRTUAL_LOAD_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
             ),
-            vol.Optional(CONF_CONSUMPTION_FORECAST_SENSOR, default=data.get(
-                CONF_CONSUMPTION_FORECAST_SENSOR
-            )): EntitySelector(
+            vol.Optional(CONF_CONSUMPTION_FORECAST_SENSOR): EntitySelector(
                 EntitySelectorConfig(domain="sensor")
             ),
         })
+
+        # Förbered förifyllda värden (hanterar "sticky default"-problemet)
+        suggested_values = {
+            CONF_API_URL: data.get(CONF_API_URL, DEFAULT_API_URL),
+            CONF_API_KEY: data.get(CONF_API_KEY, ""),
+            CONF_SOC_SENSOR: data.get(CONF_SOC_SENSOR),
+            CONF_GRID_SENSOR: data.get(CONF_GRID_SENSOR),
+            CONF_GRID_SENSOR_INVERT: data.get(CONF_GRID_SENSOR_INVERT, False),
+            CONF_BATTERY_POWER_SENSOR: data.get(CONF_BATTERY_POWER_SENSOR),
+            CONF_BATTERY_STATUS_SENSOR: data.get(CONF_BATTERY_STATUS_SENSOR),
+            CONF_BATTERY_STATUS_KEYWORDS: data.get(CONF_BATTERY_STATUS_KEYWORDS, DEFAULT_BATTERY_STATUS_KEYWORDS),
+            CONF_VIRTUAL_LOAD_SENSOR: data.get(CONF_VIRTUAL_LOAD_SENSOR),
+            CONF_CONSUMPTION_FORECAST_SENSOR: data.get(CONF_CONSUMPTION_FORECAST_SENSOR),
+        }
+        schema = self.add_suggested_values_to_schema(schema, suggested_values)
 
         return self.async_show_form(step_id="init", data_schema=schema)
