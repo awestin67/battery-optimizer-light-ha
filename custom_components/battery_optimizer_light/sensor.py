@@ -155,6 +155,7 @@ class BatteryLightStatusSensor(BatteryOptimizerSensorBase):
         # Hämtar data från coordinator och lokal peak_guard instans. Först säkerställ att data finns.
         data = self.coordinator.data or {}
         is_active = data.get("is_peak_shaving_active", True)
+        pg_status = data.get("peakguard_status")
 
         is_triggered = False
         in_maintenance = False
@@ -174,16 +175,24 @@ class BatteryLightStatusSensor(BatteryOptimizerSensorBase):
         if is_solar_override:
             return "Solar Override Active"
 
-        if not is_active:
-            return "Disabled"
-        return "Triggered" if is_triggered else "Monitoring"
+        if is_triggered:
+            return "Triggered"
+
+        if pg_status:
+            if pg_status == "Active":
+                return "Monitoring"
+            return pg_status
+
+        return "Monitoring" if is_active else "Disabled"
 
     @property
     def icon(self):
         """Returnerar en dynamisk ikon baserat på status."""
         status = self.state
-        if status == "Disabled":
+        if status == "Disabled" or status == "Off":
             return "mdi:shield-off"
+        if "Paused" in status:
+            return "mdi:pause-circle-outline"
         if status == "Triggered":
             return "mdi:shield-alert"
         if "Maintenance" in status:

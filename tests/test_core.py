@@ -213,7 +213,7 @@ async def test_peak_guard_disabled_by_backend(mock_hass_instance):
     """Krav: Om backend säger att peak shaving är inaktivt ska inget hända."""
     coordinator = MagicMock()
     # is_peak_shaving_active = False
-    coordinator.data = {"action": "HOLD", "is_peak_shaving_active": False}
+    coordinator.data = {"action": "HOLD", "is_peak_shaving_active": False, "peakguard_status": "Off"}
 
     guard = PeakGuard(mock_hass_instance, MOCK_CONFIG, coordinator)
 
@@ -267,12 +267,18 @@ def test_status_sensor():
     assert sensor.icon == "mdi:shield-alert"
 
     # Fall 3: Disabled
-    coordinator.data = {"is_peak_shaving_active": False}
-    assert sensor.state == "Disabled"
+    coordinator.data = {"is_peak_shaving_active": False, "peakguard_status": "Off"}
+    peak_guard.is_active = False
+    assert sensor.state == "Off"
     assert sensor.icon == "mdi:shield-off"
 
+    # Fall 3b: Paused
+    coordinator.data = {"is_peak_shaving_active": False, "peakguard_status": "Paused"}
+    assert sensor.state == "Paused"
+    assert sensor.icon == "mdi:pause-circle-outline"
+
     # Fall 4: Maintenance
-    coordinator.data = {"is_peak_shaving_active": True}
+    coordinator.data = {"is_peak_shaving_active": True, "peakguard_status": "Active"}
     peak_guard.is_active = False
     peak_guard.in_maintenance = True
     peak_guard.maintenance_reason = "Service Mode"

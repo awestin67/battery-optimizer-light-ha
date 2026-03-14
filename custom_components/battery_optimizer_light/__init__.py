@@ -176,6 +176,9 @@ class PeakGuard:
             is_active = True
             if self.coordinator.data:
                 is_active = self.coordinator.data.get("is_peak_shaving_active", True)
+                pg_status = self.coordinator.data.get("peakguard_status")
+                if pg_status and pg_status != "Active":
+                    is_active = False
 
             if not is_active:
                 if self.is_active:
