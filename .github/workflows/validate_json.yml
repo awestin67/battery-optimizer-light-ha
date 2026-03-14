@@ -1,0 +1,25 @@
+name: Validate JSON
+
+on:
+  push:
+    paths:
+      - '**.json'
+  pull_request:
+    paths:
+      - '**.json'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Validate JSON files
+        run: |
+          echo "Validating JSON files..."
+          find custom_components -name "*.json" -print0 | xargs -0 -I {} bash -c 'echo "Checking {}" && jq empty "{}"'

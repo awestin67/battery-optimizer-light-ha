@@ -43,6 +43,11 @@ _LOGGER = logging.getLogger(__name__)
 # --- KONFIGURATION ---
 LIMIT_ENTITY = "sensor.optimizer_light_peak_limit"
 
+# --- SOLAR OVERRIDE KONSTANTER ---
+SOLAR_TRIGGER_W = -400.0  # Gräns för att starta override (Export)
+SOLAR_RESET_W = -100.0    # Gräns för att stoppa override (Minskad export)
+BATTERY_DISCHARGE_THRESHOLD_W = 200.0 # Gräns för att anse att batteriet laddar ur
+
 async def async_setup_entry(hass: HomeAssistant, entry):
     """Set up from a config entry."""
     config = entry.data
@@ -132,6 +137,7 @@ class PeakGuard:
         self._hold_command_sent = False  # Flagga för att undvika upprepade kommandon
         self._capacity_exceeded_logged = False  # Flagga för att logga överlast en gång
         self._is_solar_override = False  # Flagga för sol-override
+        self._solar_override_trigger_start = None  # Tidsstämpel för fördröjning
         self._in_maintenance = False  # Flagga för underhållsläge
         self._maintenance_reason = None  # Orsak till underhållsläge
         self._maintenance_cooldown_start = None # Tidsstämpel för när underhållssignalen försvann
@@ -375,16 +381,6 @@ class PeakGuard:
                 # cloud_action är redan hämtad ovan
 
                 # --- SOLAR OVERRIDE ---
-                # Om vi exporterar el (negativ last) och molnet säger HOLD,
-                # är det bättre att låta batteriet ladda (Auto) än att tvinga 0W.
-
-                # Hysteres: Behåll status om vi ligger i dödbandet
-                # Trigger: -400W (Export) | Reset: -100W (Minskad export)
-                SOLAR_TRIGGER = -400.0
-                SOLAR_RESET = -100.0
-
-                # Hämta batteriets effekt för att undvika falsk triggning (t.ex. på natten)
-                # Om batteriet laddar ur (positivt värde > 200W) är det batteriet som skapar exporten, inte solen.
                 current_bat_power = 0.0
                 bat_entity = self.config.get(CONF_BATTERY_POWER_SENSOR)
                 if bat_entity:
@@ -395,12 +391,8 @@ class PeakGuard:
                         except ValueError:
                             pass
 
-                # --- EXTRA SÄKERHETSKONTROLL (Natt/Buffer Fill) ---
-                # Om vi laddar batteriet från nätet (t.ex. Buffer Fill på natten) kan "Virtual Load"
-                # ibland felaktigt visa negativt värde pga fördröjning i sensorer
-                # (Grid visar mindre import än Batteriets laddning).
-                # Därför kontrollerar vi explicit Grid-sensorn: Om vi IMPORTERAR el (>100W) är det INTE sol-överskott.
-                is_physically_exporting = True
+                # --- EXTRA SÄKERHETSKONTROLL (Natt/Buffer Fill & Sensor Lag) ---
+                is_importing = False
                 grid_id = self.config.get(CONF_GRID_SENSOR)
                 if grid_id:
                     g_state = self.hass.states.get(grid_id)
@@ -410,23 +402,40 @@ class PeakGuard:
                             if self.config.get(CONF_GRID_SENSOR_INVERT, False):
                                 g_val = -g_val
 
-                            # Om importen är större än 100W, blockera Solar Override
+                            # Om importen är större än 100W är vi garanterat inte i ett rent solel-scenario.
                             if g_val > 100:
-                                is_physically_exporting = False
+                                is_importing = True
                         except ValueError:
                             pass
 
                 # Beräkna önskat läge baserat på last (oberoende av moln-status)
                 wants_override = self._is_solar_override
-                # SÄKERHET: Om batteriet laddar ur (>200W) är det batteriet som skapar exporten, inte solen.
-                # Vi tillåter laddning (negativt värde) eftersom det är förväntat vid Solar Override.
-                if current_bat_power > 200:
+
+                if current_bat_power > BATTERY_DISCHARGE_THRESHOLD_W:
+                    # Om batteriet laddar ur (>200W) är det batteriet som skapar exporten, inte solen.
                     wants_override = False
-                elif current_load < SOLAR_TRIGGER and current_bat_power < 200:
-                    # KRÄV att vi faktiskt exporterar fysiskt (eller att grid-sensor saknas)
-                    wants_override = is_physically_exporting
-                elif current_load > SOLAR_RESET:
+                    self._solar_override_trigger_start = None
+                elif current_load < SOLAR_TRIGGER_W and not is_importing:
+                    if not self._is_solar_override:
+                        # Starta timer för att kräva att värdet hålls i 30 sekunder (filtrerar bort sensor-lag)
+                        if self._solar_override_trigger_start is None:
+                            self._solar_override_trigger_start = dt_util.utcnow()
+                            _LOGGER.debug(
+                                f"☀️ Potential Solar Override detected (Load: {current_load} W). "
+                                "Waiting 30s to verify."
+                            )
+                        elif dt_util.utcnow() - self._solar_override_trigger_start >= timedelta(seconds=30):
+                            wants_override = True
+                    else:
+                        wants_override = True
+                elif current_load > SOLAR_RESET_W or is_importing:
                     wants_override = False
+                    self._solar_override_trigger_start = None
+                else:
+                    # Inom hysteres-zonen (-400 till -100)
+                    if not self._is_solar_override:
+                        # Återställ timer om vi studsar upp över trigg-gränsen innan 30 sekunder har gått
+                        self._solar_override_trigger_start = None
 
                 new_override = False
 
@@ -449,8 +458,10 @@ class PeakGuard:
                     self.coordinator.async_update_listeners()  # Uppdatera sensorer
 
                     if new_override:
+                        _LOGGER.info(f"☀️ Solar Override Activated. Load: {current_load} W. Enabling Auto Mode.")
                         await self._report_solar_override(current_load, limit_w)
                     else:
+                        _LOGGER.info(f"🌑 Solar Override Deactivated. Load: {current_load} W. Resuming Cloud Control.")
                         await self._report_solar_override_clear(current_load, limit_w)
 
                 if cloud_action != "HOLD":

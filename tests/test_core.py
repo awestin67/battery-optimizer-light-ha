@@ -17,6 +17,7 @@
 import sys
 import os
 from unittest.mock import MagicMock
+import datetime
 
 # --- MOCK HOME ASSISTANT ---
 # Vi måste mocka HA-moduler INNAN vi importerar komponenten
@@ -34,8 +35,10 @@ sys.modules["homeassistant.components"] = mock_hass
 sys.modules["homeassistant.loader"] = mock_hass
 
 mock_util = MagicMock()
+mock_util.utcnow.side_effect = lambda: datetime.datetime.now(datetime.timezone.utc)
 sys.modules["homeassistant.util"] = mock_util
 sys.modules["homeassistant.util.dt"] = mock_util
+mock_hass.util.dt = mock_util
 
 mock_const = MagicMock()
 mock_const.STATE_UNAVAILABLE = "unavailable"
@@ -364,6 +367,12 @@ async def test_solar_override_reports_to_cloud(mock_hass_instance):
     # Kör update
     await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
 
+    # Verifiera att override inte triggats direkt (väntar på 30s)
+    assert guard.is_solar_override is False
+
+    guard._solar_override_trigger_start -= datetime.timedelta(seconds=35)
+    await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
+
     # Verifiera att override aktiverades och rapport skickades
     assert guard.is_solar_override is True
     guard._report_solar_override.assert_called_with(-500.0, 5000.0)
@@ -443,6 +452,9 @@ async def test_peak_guard_calculates_load_with_inverted_grid(mock_hass_instance)
     # Kör update utan virtuell sensor-ID
     await guard.update(None, "sensor.optimizer_light_peak_limit")
 
+    guard._solar_override_trigger_start -= datetime.timedelta(seconds=35)
+    await guard.update(None, "sensor.optimizer_light_peak_limit")
+
     # Om inverteringen fungerade är lasten -5000. -5000 < -200 -> Solar Override.
     assert guard.is_solar_override is True
 
@@ -518,6 +530,8 @@ async def test_peak_guard_solar_override_hysteresis(mock_hass_instance):
         await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
 
     # 1. Trigga Override (Last < -400, t.ex. -450)
+    await set_load(-450)
+    guard._solar_override_trigger_start -= datetime.timedelta(seconds=35)
     await set_load(-450)
     assert guard.is_solar_override is True
 
@@ -742,6 +756,9 @@ async def test_peak_guard_handles_high_export_as_solar_override(mock_hass_instan
     # Kör update
     await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
 
+    guard._solar_override_trigger_start -= datetime.timedelta(seconds=35)
+    await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
+
     # Verifiera att PeakGuard INTE är aktiv (ingen urladdning)
     assert guard.is_active is False
     # Verifiera att Solar Override ÄR aktiv (tillåt laddning)
@@ -801,6 +818,10 @@ async def test_peak_guard_prevents_solar_override_during_buffer_fill_lag(mock_ha
     mock_hass_instance.states.get.side_effect = get_state_side_effect
 
     # Kör update
+    await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
+
+    if guard._solar_override_trigger_start:
+        guard._solar_override_trigger_start -= datetime.timedelta(seconds=35)
     await guard.update("sensor.husets_netto_last_virtuell", "sensor.optimizer_light_peak_limit")
 
     # Verifiera att Solar Override INTE aktiveras, trots att lasten är -500W

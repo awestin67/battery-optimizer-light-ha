@@ -18,9 +18,17 @@ import json
 import subprocess
 import sys
 import os
+import shutil
+from collections import OrderedDict
 
 try:
     import requests
+    # Kontrollera att det är rätt requests-bibliotek och inte en lokal mapp
+    if not hasattr(requests, "post"):
+        print("❌ FEL: Det finns en lokal mapp som heter 'requests' i projektet som skuggar biblioteket.")
+        print("   Detta gör att Python laddar din mapp istället för 'requests'-paketet.")
+        print("   👉 Lösning: Ta bort mapparna 'requests', 'Lib' och 'site-packages' från projektroten.")
+        sys.exit(1)
 except ImportError:
     sys.exit("❌ Modulen 'requests' saknas. Installera den med: pip install requests")
 
@@ -120,10 +128,15 @@ def run_tests():
     print("\n--- 🧪 KÖR TESTER ---")
     try:
         test_dir = os.path.join(BASE_DIR, "tests")
-        subprocess.run(["pytest", test_dir], check=True, shell=False)
+        if not os.path.exists(test_dir) or not os.listdir(test_dir):
+            print("⚠️  Inga tester hittades i 'tests/'. Hoppar över.")
+            return
+
+        subprocess.run(["pytest", "-v", test_dir], check=True, shell=False)
         print("✅ Alla tester godkända.")
     except FileNotFoundError:
-        print("⚠️  Kunde inte hitta 'pytest'. Installera det med 'pip install pytest pytest-asyncio'.")
+        print("⚠️  Kunde inte hitta 'pytest'.")
+        print("👉 Kör: pip install -r requirements_test.txt")
         sys.exit(1)
     except subprocess.CalledProcessError:
         print("\n❌ Testerna misslyckades! Åtgärda felen innan release.")
@@ -141,23 +154,271 @@ def run_lint():
         print("\n❌ Linting misslyckades! Åtgärda felen innan release.")
         sys.exit(1)
 
-def create_github_release(version):
-    print("\n--- 🚀 SKAPA GITHUB RELEASE ---")
+def check_license_headers():
+    """Kontrollerar att alla python-filer har rätt licens-header."""
+    print("\n--- 📄 KONTROLLERAR LICENS-HEADERS ---")
 
-    # Hitta repo-namn från git config
-    repo_part = None
+    short_header = "Copyright (C) 2026 @awestin67"
+    # Del av den långa GPL-texten för verifiering
+    long_header_part = "This program is free software: you can redistribute it"
+
+    missing_short = []
+    missing_long = []
+
+    for root, dirs, files in os.walk(BASE_DIR):
+        # Ignorera mappar
+        ignored = [
+            ".venv", "venv", "env", "__pycache__", ".git", ".pytest_cache",
+            "requests", "Lib", "site-packages", "build", "dist"
+        ]
+        dirs[:] = [d for d in dirs if d not in ignored]
+
+        for file in files:
+            if file.endswith(".py"):
+                file_path = os.path.join(root, file)
+                rel_path = os.path.relpath(file_path, BASE_DIR)
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+
+                        # 1. Alla filer ska ha Copyright-raden
+                        if short_header not in content:
+                            missing_short.append(rel_path)
+                            continue
+
+                        # 2. Filer under custom_components ska ha lång header
+                        if "custom_components" in rel_path:
+                            if long_header_part not in content:
+                                missing_long.append(rel_path)
+
+                except Exception as e:
+                    print(f"⚠️  Kunde inte läsa {file_path}: {e}")
+
+    failed = False
+    if missing_short:
+        print("❌ Följande filer saknar Copyright-header:")
+        for f in missing_short:
+            print(f"   - {f}")
+        failed = True
+
+    if missing_long:
+        print("❌ Följande filer under custom_components saknar fullständig GPL-licenstext:")
+        for f in missing_long:
+            print(f"   - {f}")
+        failed = True
+
+    if failed:
+        sys.exit(1)
+
+    print("✅ Alla Python-filer har korrekt licens-header.")
+
+def sort_manifest_keys(file_path):
+    """Sorterar nycklar i manifest.json enligt Hassfest-krav: domain, name, sedan alfabetiskt."""
+    print(f"\n--- 🔧 FIXAR SORTERING I {os.path.basename(file_path)} ---")
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Spara undan domain och name
+        domain = data.pop("domain", None)
+        name = data.pop("name", None)
+
+        # Skapa en ny OrderedDict
+        new_data = OrderedDict()
+        if domain:
+            new_data["domain"] = domain
+        if name:
+            new_data["name"] = name
+
+        # Lägg till resten sorterat
+        for key in sorted(data.keys()):
+            new_data[key] = data[key]
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(new_data, f, indent=2, ensure_ascii=False)
+            f.write("\n") # Lägg till nyrad på slutet
+
+        print("✅ Manifest sorterat korrekt.")
+    except Exception as e:
+        print(f"⚠️  Kunde inte sortera manifest: {e}")
+
+def run_hassfest_local():
+    """Försöker köra hassfest via Docker om det finns tillgängligt."""
+    print("\n--- 🏠 KÖR HASSFEST (Docker) ---")
+
+    if not shutil.which("docker"):
+        print("⚠️  Docker hittades inte i PATH. Hoppar över lokal Hassfest-validering.")
+        print("   (Installera Docker Desktop för att köra detta lokalt)")
+        return
+
+    # Kolla om Docker daemon faktiskt svarar (är igång)
+    try:
+        subprocess.run(
+            ["docker", "info"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            shell=False,
+        )
+    except subprocess.CalledProcessError:
+        print("⚠️  Docker är installerat men verkar inte vara igång (Starta Docker Desktop!).")
+        print("   Hoppar över lokal Hassfest-validering.")
+        return
+
+    try:
+        cmd = [
+            "docker", "run", "--rm", "-v", f"{os.getcwd()}:/github/workspace",
+            "ghcr.io/home-assistant/hassfest:latest"
+        ]
+        subprocess.run(cmd, check=True, shell=False)
+        print("✅ Hassfest (Local) godkänd!")
+    except subprocess.CalledProcessError:
+        print("\n❌ Hassfest (eller Docker) returnerade ett fel.")
+        print("   Om Docker inte är igång kan du ignorera detta (GitHub Actions kör kollen sen).")
+        if input("   Vill du fortsätta ändå? (j/n): ").lower() != 'j':
+            sys.exit(1)
+
+def run_hacs_validation_local():
+    """Validerar specifika HACS-krav lokalt (filer och manifest-data)."""
+    print("\n--- 📦 HACS VALIDERING (Lokal) ---")
+
+    # 1. Krav på informationsfil
+    readme = os.path.join(BASE_DIR, "README.md")
+    info = os.path.join(BASE_DIR, "info.md")
+
+    if not os.path.exists(readme) and not os.path.exists(info):
+        print("❌ HACS kräver att antingen 'README.md' eller 'info.md' finns i roten.")
+        sys.exit(1)
+
+    # 2. hacs.json (Valfritt men måste vara giltigt om det finns)
+    hacs_path = os.path.join(BASE_DIR, "hacs.json")
+    if os.path.exists(hacs_path):
+        try:
+            with open(hacs_path, "r", encoding="utf-8") as f:
+                json.load(f)
+            print("✅ hacs.json är giltig.")
+        except json.JSONDecodeError:
+            print("❌ hacs.json innehåller ogiltig JSON.")
+            sys.exit(1)
+
+    # 3. Manifest-koll för länkar (HACS rekommendationer/krav)
+    try:
+        with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        missing_keys = [k for k in ["documentation", "issue_tracker"] if k not in data]
+        if missing_keys:
+            print(f"⚠️  Manifest saknar fält som HACS rekommenderar: {', '.join(missing_keys)}")
+        else:
+            print("✅ Manifest innehåller dokumentationslänkar.")
+
+    except Exception as e:
+        print(f"⚠️  Kunde inte läsa manifest för HACS-koll: {e}")
+
+def check_images():
+    """Kollar att bilder finns för HA UI och skapar icon.png om den saknas."""
+    print("\n--- 🖼️  KOLLAR BILDER ---")
+    comp_dir = os.path.join(BASE_DIR, "custom_components", "battery_optimizer_light")
+    logo_path = os.path.join(comp_dir, "logo.png")
+    icon_path = os.path.join(comp_dir, "icon.png")
+
+    if os.path.exists(logo_path) and (not os.path.exists(icon_path) or os.path.getsize(icon_path) == 0):
+        print("⚠️  icon.png saknas (krävs för integrationslistan).")
+        print("   Kopierar logo.png till icon.png...")
+        shutil.copyfile(logo_path, icon_path)
+        print("✅ icon.png skapad.")
+    elif os.path.exists(icon_path):
+        print("✅ icon.png finns.")
+    else:
+        print("⚠️  Ingen logo.png hittades. Integrationen kommer sakna bilder i HA.")
+
+def get_github_repo_slug():
+    """Hämtar 'user/repo' från git config."""
     try:
         remote_url = subprocess.check_output(
             ["git", "config", "--get", "remote.origin.url"], shell=False
         ).decode().strip()
-        # Hantera git@github.com:user/repo.git och https://github.com/user/repo.git
         if "github.com" in remote_url:
-            # Enkel parsing
-            repo_part = remote_url.split("github.com")[-1].replace(":", "/").lstrip("/")
-            if repo_part.endswith(".git"):
-                repo_part = repo_part[:-4]
+            slug = remote_url.split("github.com")[-1].replace(":", "/").lstrip("/")
+            if slug.endswith(".git"):
+                slug = slug[:-4]
+            return slug
     except Exception:
-        print("⚠️  Kunde inte läsa git remote URL.")
+        pass
+    return None
+
+def check_github_metadata(repo_slug, token):
+    """Kontrollerar och uppdaterar GitHub-metadata (Beskrivning & Ämnen)."""
+    if not repo_slug:
+        return
+
+    print("\n--- 🏷️  GITHUB METADATA ---")
+
+    if not token:
+        print("⚠️  Ingen GITHUB_TOKEN hittad. Hoppar över automatisk kontroll av metadata.")
+        print("   👉 Du måste manuellt ange Beskrivning och Topics på GitHub för att HACS-valideringen ska passera.")
+        return
+
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    url = f"https://api.github.com/repos/{repo_slug}"
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            print(f"⚠️  Kunde inte hämta metadata: {resp.status_code}")
+            return
+
+        data = resp.json()
+        description = data.get("description")
+        topics = data.get("topics", [])
+
+        needs_update = False
+        new_description = description
+        new_topics = topics
+
+        if not description:
+            print("❌ Repository saknar beskrivning (Krävs av HACS).")
+            new_description = input("Ange beskrivning: ").strip()
+            if new_description:
+                needs_update = True
+
+        if not topics:
+            print("❌ Repository saknar ämnen/topics (Krävs av HACS).")
+            print("Förslag: home-assistant, integration, hacs, sonnen, battery")
+            topics_str = input("Ange topics (komma-separerad): ").strip()
+            if topics_str:
+                new_topics = [t.strip() for t in topics_str.split(",") if t.strip()]
+                needs_update = True
+
+        if needs_update:
+            print("Uppdaterar GitHub...")
+            patch_data = {}
+            if new_description:
+                patch_data["description"] = new_description
+            if new_topics:
+                patch_data["topics"] = new_topics
+
+            p_resp = requests.patch(url, json=patch_data, headers=headers, timeout=10)
+            if p_resp.status_code == 200:
+                print("✅ GitHub-metadata uppdaterad!")
+            else:
+                print(f"❌ Misslyckades uppdatera: {p_resp.status_code}")
+        else:
+            print("✅ Metadata OK.")
+
+    except Exception as e:
+        print(f"⚠️  Fel vid metadatakontroll: {e}")
+
+def create_github_release(version, repo_slug=None):
+    print("\n--- 🚀 SKAPA GITHUB RELEASE ---")
+
+    # Hitta repo-namn från git config
+    repo_part = repo_slug
+    if not repo_part:
+        repo_part = get_github_repo_slug()
 
     token = os.getenv("GITHUB_TOKEN")
     if not token:
@@ -262,9 +523,17 @@ def create_github_release(version):
 def main():
     # 1. Säkerhetskollar
     check_branch()
+    repo_slug = get_github_repo_slug()
+
     run_tests()
     run_lint()
+    check_license_headers()
+    sort_manifest_keys(MANIFEST_PATH) # Fixar sorteringen automatiskt före release
+    run_hassfest_local() # Kör Hassfest via Docker
+    run_hacs_validation_local() # Kör lokal HACS-koll
+    check_images()
     check_for_updates()
+    check_github_metadata(repo_slug, os.getenv("GITHUB_TOKEN"))
 
     # 2. Hämta nuvarande version
     current_ver = get_current_version(MANIFEST_PATH)
@@ -310,7 +579,7 @@ def main():
     run_command(["git", "push"])
     run_command(["git", "push", "--tags"])
 
-    create_github_release(new_ver)
+    create_github_release(new_ver, repo_slug)
 
     print(f"\n✨ KLART! Version {new_ver} är publicerad.")
 
