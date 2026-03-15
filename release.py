@@ -27,7 +27,7 @@ def get_project_python() -> Path:
     project_root = Path(__file__).resolve().parent
     venv_path_win = project_root / ".venv" / "Scripts" / "python.exe"
     venv_path_nix = project_root / ".venv" / "bin" / "python"
-    
+
     if venv_path_win.exists():
         return venv_path_win
     elif venv_path_nix.exists():
@@ -126,7 +126,9 @@ def check_for_updates():
         print("Hämtar status från GitHub...")
         run_command(["git", "fetch", "origin"])
 
-        incoming = run_command(["git", "log", "HEAD..origin/HEAD", "--oneline"], capture_output=True, exit_on_error=False)
+        incoming = run_command(
+            ["git", "log", "HEAD..origin/HEAD", "--oneline"], capture_output=True, exit_on_error=False
+        )
 
         if incoming:
             print("\n❌ STOPP! GitHub har ändringar som du saknar:")
@@ -195,7 +197,7 @@ def check_license_headers():
         # Ignorera mappar i IGNORED_DIRS
         if any(part in IGNORED_DIRS for part in file_path.parts):
             continue
-            
+
         rel_path = file_path.relative_to(BASE_DIR)
         try:
             content = file_path.read_text(encoding="utf-8")
@@ -348,7 +350,9 @@ def check_images():
 def get_github_repo_slug():
     """Hämtar 'user/repo' från git config."""
     try:
-        remote_url = run_command(["git", "config", "--get", "remote.origin.url"], capture_output=True, exit_on_error=False)
+        remote_url = run_command(
+            ["git", "config", "--get", "remote.origin.url"], capture_output=True, exit_on_error=False
+        )
         if "github.com" in remote_url:
             slug = remote_url.split("github.com")[-1].replace(":", "/").lstrip("/")
             if slug.endswith(".git"):
@@ -457,13 +461,24 @@ def create_github_release(version, repo_slug=None, diff_uncommitted=""):
 
         if len(tags) >= 2:
             prev_tag = tags[1]
-            commits_out = run_command(["git", "log", f"{prev_tag}..HEAD", "--pretty=format:- %s"], capture_output=True, exit_on_error=False)
+            commits_out = run_command(
+                ["git", "log", f"{prev_tag}..HEAD", "--pretty=format:- %s"],
+                capture_output=True,
+                exit_on_error=False,
+            )
         else:
             # Om det inte finns någon tidigare tagg, ta de 20 senaste commitarna
-            commits_out = run_command(["git", "log", "-n", "20", "--pretty=format:- %s"], capture_output=True, exit_on_error=False)
+            commits_out = run_command(
+                ["git", "log", "-n", "20", "--pretty=format:- %s"],
+                capture_output=True,
+                exit_on_error=False,
+            )
 
         # Filtrera bort release-commiten
-        lines = [line for line in commits_out.splitlines() if f"Release {version}" not in line and f"Release v{version}" not in line]
+        lines = [
+            line for line in commits_out.splitlines()
+            if f"Release {version}" not in line and f"Release v{version}" not in line
+        ]
         commits = "\n".join(lines)
     except Exception:
         pass
@@ -483,10 +498,10 @@ def create_github_release(version, repo_slug=None, diff_uncommitted=""):
         print("\n🤖 Ber Gemini AI att summera release notes...")
         prompt = f"Skapa snygga, kategoriserade release notes på engelska för version {version}.\n"
         prompt += "Kategorisera dem med emojis (t.ex. 🚀 Features, 🐛 Fixes, 🔧 Refactoring).\n\n"
-        
+
         if commits:
             prompt += f"Här är commit-historiken:\n{commits}\n\n"
-            
+
         if diff:
             prompt += f"Här är osparade kodändringar (diff):\n{diff}\n\n"
 
