@@ -412,7 +412,7 @@ def check_github_metadata(repo_slug, token):
     except Exception as e:
         print(f"⚠️  Fel vid metadatakontroll: {e}")
 
-def create_github_release(version, repo_slug=None):
+def create_github_release(version, repo_slug=None, diff_uncommitted=""):
     print("\n--- 🚀 SKAPA GITHUB RELEASE ---")
 
     # Hitta repo-namn från git config
@@ -439,7 +439,7 @@ def create_github_release(version, repo_slug=None):
         return
 
     # Försök hämta commits sedan förra taggen
-    suggested_notes = ""
+    commits = ""
     try:
         tags = subprocess.check_output(
             ["git", "tag", "--sort=-creatordate"],
@@ -448,19 +448,68 @@ def create_github_release(version, repo_slug=None):
 
         if len(tags) >= 2:
             prev_tag = tags[1]
-            commits = subprocess.check_output(
+            commits_out = subprocess.check_output(
                 ["git", "log", f"{prev_tag}..HEAD", "--pretty=format:- %s"],
                 stderr=subprocess.DEVNULL
             ).decode().strip()
+        else:
+            # Om det inte finns någon tidigare tagg, ta de 20 senaste commitarna
+            commits_out = subprocess.check_output(
+                ["git", "log", "-n", "20", "--pretty=format:- %s"],
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
 
-            # Filtrera bort release-commiten
-            lines = [line for line in commits.splitlines() if f"Release {version}" not in line]
-            suggested_notes = "\n".join(lines)
+        # Filtrera bort release-commiten
+        lines = [line for line in commits_out.splitlines() if f"Release {version}" not in line and f"Release v{version}" not in line]
+        commits = "\n".join(lines)
     except Exception:
         pass
 
+    diff = ""
+    if diff_uncommitted:
+        # Trunkera diffen till max 20 000 tecken ifall den skulle bli gigantisk
+        if len(diff_uncommitted) > 20000:
+            diff = diff_uncommitted[:20000] + "\n... [diff trunkerad]"
+        else:
+            diff = diff_uncommitted
+
+    suggested_notes = ""
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if api_key and (commits or diff):
+        print("\n🤖 Ber Gemini AI att summera release notes...")
+        prompt = f"Skapa snygga, kategoriserade release notes på svenska för version {version}.\n"
+        prompt += "Kategorisera dem med emojis (t.ex. 🚀 Features, 🐛 Fixes, 🔧 Refactoring).\n\n"
+        
+        if commits:
+            prompt += f"Här är commit-historiken:\n{commits}\n\n"
+            
+        if diff:
+            prompt += f"Här är osparade kodändringar (diff):\n{diff}\n\n"
+
+        url_gemini = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        headers_gemini = {"Content-Type": "application/json"}
+        payload_gemini = {"contents": [{"parts": [{"text": prompt}]}]}
+
+        try:
+            resp_gemini = requests.post(url_gemini, json=payload_gemini, headers=headers_gemini, timeout=30)
+            if resp_gemini.status_code == 200:
+                data = resp_gemini.json()
+                ai_text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                if ai_text:
+                    print("✅ AI-förslag skapat!")
+                    suggested_notes = ai_text.strip()
+            else:
+                print(f"⚠️ Kunde inte generera AI-release notes: API svarade med {resp_gemini.status_code}")
+        except Exception as e:
+            print(f"⚠️ Kunde inte generera AI-release notes: {e}")
+
+    # Fallback om vi inte har AI eller det misslyckades
+    if not suggested_notes and commits:
+        suggested_notes = commits
+
     if suggested_notes:
-        print("\n📝 Föreslagna release notes (baserat på commits):")
+        print("\n📝 Föreslagna release notes:")
         print("-" * 40)
         print(suggested_notes)
         print("-" * 40)
@@ -558,6 +607,15 @@ def main():
     if confirm.lower() != 'j':
         return
 
+    # Hämta osparade ändringar (diff) INNAN vi committar dem
+    try:
+        uncommitted_diff = subprocess.check_output(
+            ["git", "diff", "HEAD"],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except Exception:
+        uncommitted_diff = ""
+
     # 4. Uppdatera filen
     update_manifest(MANIFEST_PATH, new_ver)
     print(f"\n✅ {MANIFEST_PATH} uppdaterad.")
@@ -579,7 +637,7 @@ def main():
     run_command(["git", "push"])
     run_command(["git", "push", "--tags"])
 
-    create_github_release(new_ver, repo_slug)
+    create_github_release(new_ver, repo_slug, uncommitted_diff)
 
     print(f"\n✨ KLART! Version {new_ver} är publicerad.")
 
