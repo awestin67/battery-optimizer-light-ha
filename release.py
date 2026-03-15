@@ -20,6 +20,27 @@ import sys
 import os
 import shutil
 from collections import OrderedDict
+from pathlib import Path
+
+def get_project_python() -> Path:
+    """Tries to find the python executable in the local .venv"""
+    project_root = Path(__file__).resolve().parent
+    venv_path_win = project_root / ".venv" / "Scripts" / "python.exe"
+    venv_path_nix = project_root / ".venv" / "bin" / "python"
+    
+    if venv_path_win.exists():
+        return venv_path_win
+    elif venv_path_nix.exists():
+        return venv_path_nix
+    return Path(sys.executable)
+
+python_exe = get_project_python()
+
+# Förhindra att skriptet körs utanför den lokala virtuella miljön
+if os.path.normcase(os.path.abspath(sys.executable)) != os.path.normcase(os.path.abspath(python_exe)):
+    print("❌ Varning: Skriptet verkar köras utanför den virtuella miljön!")
+    print(f"👉 Vänligen aktivera din .venv och kör skriptet igen (t.ex: '{python_exe} release.py')")
+    sys.exit(1)
 
 try:
     import requests
