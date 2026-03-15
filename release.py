@@ -62,21 +62,31 @@ except ImportError:
 
 # --- INSTÄLLNINGAR ---
 # Korrekt sökväg baserat på ditt domännamn
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MANIFEST_PATH = os.path.join(BASE_DIR, "custom_components", "battery_optimizer_light", "manifest.json")
+BASE_DIR = Path(__file__).resolve().parent
+MANIFEST_PATH = BASE_DIR / "custom_components" / "battery_optimizer_light" / "manifest.json"
 
-def run_command(command):
-    """Hjälpfunktion för att köra terminalkommandon"""
+IGNORED_DIRS = {
+    ".venv", "venv", "env", "__pycache__", ".git", ".pytest_cache",
+    "requests", "Lib", "site-packages", "build", "dist"
+}
+
+def run_command(command, capture_output=False, exit_on_error=True):
+    """Hjälpfunktion för att köra terminalkommandon enhetligt."""
     try:
+        if capture_output:
+            return subprocess.check_output(command, stderr=subprocess.DEVNULL, shell=False).decode('utf-8').strip()
         subprocess.run(command, check=True, shell=False)
-    except subprocess.CalledProcessError:
-        cmd_str = ' '.join(command) if isinstance(command, list) else command
-        print(f"❌ Fel vid kommando: {cmd_str}")
-        sys.exit(1)
+        return ""
+    except subprocess.CalledProcessError as e:
+        if exit_on_error:
+            cmd_str = ' '.join(command) if isinstance(command, list) else command
+            print(f"❌ Fel vid kommando: {cmd_str}")
+            sys.exit(1)
+        raise e
 
-def get_current_version(file_path):
+def get_current_version(file_path: Path):
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with file_path.open("r", encoding="utf-8") as f:
             data = json.load(f)
             return data.get("version", "0.0.0")
     except FileNotFoundError:
@@ -100,14 +110,15 @@ def bump_version(version, part):
         patch += 1
     return f"{major}.{minor}.{patch}"
 
-def update_manifest(file_path, new_version):
-    with open(file_path, "r", encoding="utf-8") as f:
+def update_manifest(file_path: Path, new_version):
+    with file_path.open("r", encoding="utf-8") as f:
         data = json.load(f)
 
     data["version"] = new_version
 
-    with open(file_path, "w", encoding="utf-8") as f:
+    with file_path.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
 
 def check_for_updates():
     print("\n--- 🔍 KOLLAR EFTER UPPDATERINGAR (SSH) ---")
@@ -115,10 +126,7 @@ def check_for_updates():
         print("Hämtar status från GitHub...")
         run_command(["git", "fetch", "origin"])
 
-        incoming = subprocess.check_output(
-            ["git", "log", "HEAD..origin/HEAD", "--oneline"],
-            shell=False
-        ).decode().strip()
+        incoming = run_command(["git", "log", "HEAD..origin/HEAD", "--oneline"], capture_output=True, exit_on_error=False)
 
         if incoming:
             print("\n❌ STOPP! GitHub har ändringar som du saknar:")
@@ -127,33 +135,30 @@ def check_for_updates():
             sys.exit(1)
         print("✅ Synkad med servern.")
 
-    except subprocess.CalledProcessError:
+    except Exception:
         print("⚠️  Kunde inte nå GitHub. Fortsätter ändå...")
 
 def check_branch():
     """Varnar om man inte står på main-branchen"""
     try:
-        branch = subprocess.check_output(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            shell=False
-        ).decode().strip()
+        branch = run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, exit_on_error=False)
         if branch != "main":
             print(f"⚠️  Du står på branch '{branch}'. Rekommenderat är 'main'.")
             confirm = input("Vill du fortsätta ändå? (j/n): ")
             if confirm.lower() != 'j':
                 sys.exit(1)
-    except subprocess.CalledProcessError:
+    except Exception:
         pass
 
 def run_tests():
     print("\n--- 🧪 KÖR TESTER ---")
     try:
-        test_dir = os.path.join(BASE_DIR, "tests")
-        if not os.path.exists(test_dir) or not os.listdir(test_dir):
+        test_dir = BASE_DIR / "tests"
+        if not test_dir.exists() or not any(test_dir.iterdir()):
             print("⚠️  Inga tester hittades i 'tests/'. Hoppar över.")
             return
 
-        subprocess.run(["pytest", "-v", test_dir], check=True, shell=False)
+        subprocess.run(["pytest", "-v", str(test_dir)], check=True, shell=False)
         print("✅ Alla tester godkända.")
     except FileNotFoundError:
         print("⚠️  Kunde inte hitta 'pytest'.")
@@ -167,7 +172,7 @@ def run_lint():
     print("\n--- 🧹 KÖR LINT (Ruff) ---")
     try:
         # Kör ruff i BASE_DIR
-        subprocess.run(["ruff", "check", "."], cwd=BASE_DIR, check=True, shell=False)
+        subprocess.run(["ruff", "check", "."], cwd=str(BASE_DIR), check=True, shell=False)
         print("✅ Linting godkänd.")
     except FileNotFoundError:
         print("⚠️  Kunde inte hitta 'ruff'. Installera det med 'pip install ruff' för att köra kodgranskning.")
@@ -186,34 +191,27 @@ def check_license_headers():
     missing_short = []
     missing_long = []
 
-    for root, dirs, files in os.walk(BASE_DIR):
-        # Ignorera mappar
-        ignored = [
-            ".venv", "venv", "env", "__pycache__", ".git", ".pytest_cache",
-            "requests", "Lib", "site-packages", "build", "dist"
-        ]
-        dirs[:] = [d for d in dirs if d not in ignored]
+    for file_path in BASE_DIR.rglob("*.py"):
+        # Ignorera mappar i IGNORED_DIRS
+        if any(part in IGNORED_DIRS for part in file_path.parts):
+            continue
+            
+        rel_path = file_path.relative_to(BASE_DIR)
+        try:
+            content = file_path.read_text(encoding="utf-8")
 
-        for file in files:
-            if file.endswith(".py"):
-                file_path = os.path.join(root, file)
-                rel_path = os.path.relpath(file_path, BASE_DIR)
-                try:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        content = f.read()
+            # 1. Alla filer ska ha Copyright-raden
+            if short_header not in content:
+                missing_short.append(str(rel_path))
+                continue
 
-                        # 1. Alla filer ska ha Copyright-raden
-                        if short_header not in content:
-                            missing_short.append(rel_path)
-                            continue
+            # 2. Filer under custom_components ska ha lång header
+            if "custom_components" in file_path.parts:
+                if long_header_part not in content:
+                    missing_long.append(str(rel_path))
 
-                        # 2. Filer under custom_components ska ha lång header
-                        if "custom_components" in rel_path:
-                            if long_header_part not in content:
-                                missing_long.append(rel_path)
-
-                except Exception as e:
-                    print(f"⚠️  Kunde inte läsa {file_path}: {e}")
+        except Exception as e:
+            print(f"⚠️  Kunde inte läsa {file_path}: {e}")
 
     failed = False
     if missing_short:
@@ -233,11 +231,11 @@ def check_license_headers():
 
     print("✅ Alla Python-filer har korrekt licens-header.")
 
-def sort_manifest_keys(file_path):
+def sort_manifest_keys(file_path: Path):
     """Sorterar nycklar i manifest.json enligt Hassfest-krav: domain, name, sedan alfabetiskt."""
-    print(f"\n--- 🔧 FIXAR SORTERING I {os.path.basename(file_path)} ---")
+    print(f"\n--- 🔧 FIXAR SORTERING I {file_path.name} ---")
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with file_path.open("r", encoding="utf-8") as f:
             data = json.load(f)
 
         # Spara undan domain och name
@@ -255,7 +253,7 @@ def sort_manifest_keys(file_path):
         for key in sorted(data.keys()):
             new_data[key] = data[key]
 
-        with open(file_path, "w", encoding="utf-8") as f:
+        with file_path.open("w", encoding="utf-8") as f:
             json.dump(new_data, f, indent=2, ensure_ascii=False)
             f.write("\n") # Lägg till nyrad på slutet
 
@@ -274,24 +272,18 @@ def run_hassfest_local():
 
     # Kolla om Docker daemon faktiskt svarar (är igång)
     try:
-        subprocess.run(
-            ["docker", "info"],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            shell=False,
-        )
-    except subprocess.CalledProcessError:
+        run_command(["docker", "info"], capture_output=True, exit_on_error=False)
+    except Exception:
         print("⚠️  Docker är installerat men verkar inte vara igång (Starta Docker Desktop!).")
         print("   Hoppar över lokal Hassfest-validering.")
         return
 
     try:
         cmd = [
-            "docker", "run", "--rm", "-v", f"{os.getcwd()}:/github/workspace",
+            "docker", "run", "--rm", "-v", f"{BASE_DIR}:/github/workspace",
             "ghcr.io/home-assistant/hassfest:latest"
         ]
-        subprocess.run(cmd, check=True, shell=False)
+        run_command(cmd, exit_on_error=False)
         print("✅ Hassfest (Local) godkänd!")
     except subprocess.CalledProcessError:
         print("\n❌ Hassfest (eller Docker) returnerade ett fel.")
@@ -304,18 +296,18 @@ def run_hacs_validation_local():
     print("\n--- 📦 HACS VALIDERING (Lokal) ---")
 
     # 1. Krav på informationsfil
-    readme = os.path.join(BASE_DIR, "README.md")
-    info = os.path.join(BASE_DIR, "info.md")
+    readme = BASE_DIR / "README.md"
+    info = BASE_DIR / "info.md"
 
-    if not os.path.exists(readme) and not os.path.exists(info):
+    if not readme.exists() and not info.exists():
         print("❌ HACS kräver att antingen 'README.md' eller 'info.md' finns i roten.")
         sys.exit(1)
 
     # 2. hacs.json (Valfritt men måste vara giltigt om det finns)
-    hacs_path = os.path.join(BASE_DIR, "hacs.json")
-    if os.path.exists(hacs_path):
+    hacs_path = BASE_DIR / "hacs.json"
+    if hacs_path.exists():
         try:
-            with open(hacs_path, "r", encoding="utf-8") as f:
+            with hacs_path.open("r", encoding="utf-8") as f:
                 json.load(f)
             print("✅ hacs.json är giltig.")
         except json.JSONDecodeError:
@@ -324,7 +316,7 @@ def run_hacs_validation_local():
 
     # 3. Manifest-koll för länkar (HACS rekommendationer/krav)
     try:
-        with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
+        with MANIFEST_PATH.open("r", encoding="utf-8") as f:
             data = json.load(f)
 
         missing_keys = [k for k in ["documentation", "issue_tracker"] if k not in data]
@@ -339,16 +331,16 @@ def run_hacs_validation_local():
 def check_images():
     """Kollar att bilder finns för HA UI och skapar icon.png om den saknas."""
     print("\n--- 🖼️  KOLLAR BILDER ---")
-    comp_dir = os.path.join(BASE_DIR, "custom_components", "battery_optimizer_light")
-    logo_path = os.path.join(comp_dir, "logo.png")
-    icon_path = os.path.join(comp_dir, "icon.png")
+    comp_dir = BASE_DIR / "custom_components" / "battery_optimizer_light"
+    logo_path = comp_dir / "logo.png"
+    icon_path = comp_dir / "icon.png"
 
-    if os.path.exists(logo_path) and (not os.path.exists(icon_path) or os.path.getsize(icon_path) == 0):
+    if logo_path.exists() and (not icon_path.exists() or icon_path.stat().st_size == 0):
         print("⚠️  icon.png saknas (krävs för integrationslistan).")
         print("   Kopierar logo.png till icon.png...")
         shutil.copyfile(logo_path, icon_path)
         print("✅ icon.png skapad.")
-    elif os.path.exists(icon_path):
+    elif icon_path.exists():
         print("✅ icon.png finns.")
     else:
         print("⚠️  Ingen logo.png hittades. Integrationen kommer sakna bilder i HA.")
@@ -356,9 +348,7 @@ def check_images():
 def get_github_repo_slug():
     """Hämtar 'user/repo' från git config."""
     try:
-        remote_url = subprocess.check_output(
-            ["git", "config", "--get", "remote.origin.url"], shell=False
-        ).decode().strip()
+        remote_url = run_command(["git", "config", "--get", "remote.origin.url"], capture_output=True, exit_on_error=False)
         if "github.com" in remote_url:
             slug = remote_url.split("github.com")[-1].replace(":", "/").lstrip("/")
             if slug.endswith(".git"):
@@ -462,23 +452,15 @@ def create_github_release(version, repo_slug=None, diff_uncommitted=""):
     # Försök hämta commits sedan förra taggen
     commits = ""
     try:
-        tags = subprocess.check_output(
-            ["git", "tag", "--sort=-creatordate"],
-            stderr=subprocess.DEVNULL
-        ).decode().strip().splitlines()
+        tags_str = run_command(["git", "tag", "--sort=-creatordate"], capture_output=True, exit_on_error=False)
+        tags = tags_str.splitlines() if tags_str else []
 
         if len(tags) >= 2:
             prev_tag = tags[1]
-            commits_out = subprocess.check_output(
-                ["git", "log", f"{prev_tag}..HEAD", "--pretty=format:- %s"],
-                stderr=subprocess.DEVNULL
-            ).decode().strip()
+            commits_out = run_command(["git", "log", f"{prev_tag}..HEAD", "--pretty=format:- %s"], capture_output=True, exit_on_error=False)
         else:
             # Om det inte finns någon tidigare tagg, ta de 20 senaste commitarna
-            commits_out = subprocess.check_output(
-                ["git", "log", "-n", "20", "--pretty=format:- %s"],
-                stderr=subprocess.DEVNULL
-            ).decode().strip()
+            commits_out = run_command(["git", "log", "-n", "20", "--pretty=format:- %s"], capture_output=True, exit_on_error=False)
 
         # Filtrera bort release-commiten
         lines = [line for line in commits_out.splitlines() if f"Release {version}" not in line and f"Release v{version}" not in line]
@@ -630,10 +612,7 @@ def main():
 
     # Hämta osparade ändringar (diff) INNAN vi committar dem
     try:
-        uncommitted_diff = subprocess.check_output(
-            ["git", "diff", "HEAD"],
-            stderr=subprocess.DEVNULL
-        ).decode().strip()
+        uncommitted_diff = run_command(["git", "diff", "HEAD"], capture_output=True, exit_on_error=False)
     except Exception:
         uncommitted_diff = ""
 
