@@ -124,4 +124,6 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
                     await asyncio.sleep(5)
                 else:
                     _LOGGER.exception("Light-Error after 3 attempts")
-                    raise UpdateFailed(f"Connection error after 3 attempts: {type(err).__name__}: {error_detail}") from err
+                    raise UpdateFailed(
+                        f"Connection error after 3 attempts: {type(err).__name__}: {error_detail}"
+                    ) from err
