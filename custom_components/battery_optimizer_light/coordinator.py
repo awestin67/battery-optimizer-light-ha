@@ -108,9 +108,20 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
                 if isinstance(err, UpdateFailed) and "Authentication failed" in str(err):
                     raise
 
+                # Get a more descriptive error message
+                error_detail = str(err)
+                if not error_detail:
+                    # Fallback for exceptions with empty string representation
+                    error_detail = repr(err) # Use repr for more technical detail if str is empty
+
                 if attempt < 2:
-                    _LOGGER.warning(f"Connection attempt {attempt + 1} failed: {err}. Retrying in 5s...")
+                    _LOGGER.warning(
+                        "Connection attempt %d failed with %s: %s. Retrying in 5s...",
+                        attempt + 1,
+                        type(err).__name__,
+                        error_detail,
+                    )
                     await asyncio.sleep(5)
                 else:
-                    _LOGGER.error(f"Light-Error: {err}")
-                    raise UpdateFailed(f"Connection error after 3 attempts: {err}") from err
+                    _LOGGER.exception("Light-Error after 3 attempts")
+                    raise UpdateFailed(f"Connection error after 3 attempts: {type(err).__name__}: {error_detail}") from err
