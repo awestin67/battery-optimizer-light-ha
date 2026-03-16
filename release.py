@@ -496,8 +496,9 @@ def create_github_release(version, repo_slug=None, diff_uncommitted=""):
 
     if api_key and (commits or diff):
         print("\n🤖 Ber Gemini AI att summera release notes...")
-        prompt = f"Skapa snygga, kategoriserade release notes på engelska för version {version}.\n"
-        prompt += "Kategorisera dem med emojis (t.ex. 🚀 Features, 🐛 Fixes, 🔧 Refactoring).\n\n"
+        prompt = "Skapa kortfattade och sakliga release notes på engelska.\n"
+        prompt += "Inkludera inte versionsnummer eller onödig introduktionstext.\n"
+        prompt += "Kategorisera ändringarna med emojis (t.ex. 🚀 Features, 🐛 Fixes, 🔧 Refactoring).\n\n"
 
         if commits:
             prompt += f"Här är commit-historiken:\n{commits}\n\n"

@@ -17,6 +17,7 @@
 import logging
 import asyncio
 from datetime import timedelta
+import aiohttp
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # type: ignore
 from homeassistant.helpers.aiohttp_client import async_get_clientsession # type: ignore
 
@@ -93,7 +94,9 @@ class BatteryOptimizerLightCoordinator(DataUpdateCoordinator):
         session = async_get_clientsession(self.hass)
         for attempt in range(3):
             try:
-                async with session.post(self.api_url, json=payload, timeout=20) as response:
+                async with session.post(
+                    self.api_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)
+                ) as response:
                     if response.status == 401:
                         text = await response.text()
                         raise UpdateFailed(f"Authentication failed: {text}")
