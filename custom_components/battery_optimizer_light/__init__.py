@@ -180,13 +180,18 @@ class PeakGuard:
                 if pg_status and pg_status != "Active":
                     is_active = False
 
+            # Om PeakGuard är inaktiverat från backend, avbryt all lokal styrning.
             if not is_active:
+                # Stäng av eventuell pågående peak-hantering
                 if self.is_active:
+                    _LOGGER.info("PeakGuard is disabled by backend. Clearing active peak.")
                     self._set_reported_state(False)
+                # Stäng av eventuell pågående solar override
+                if self.is_solar_override:
+                    _LOGGER.info("🌑 PeakGuard is disabled by backend. Deactivating Solar Override.")
+                    self._is_solar_override = False
+                    self.coordinator.async_update_listeners()
                 return
-            # Om Peak Shaving är inaktiverat, avbryt eventuell pågående peak-hantering
-            if not is_active and self.is_active:
-                self._set_reported_state(False)
 
             # 0.1 Kontrollera Batteristatus (Maintenance/Full Charge)
             status_entity = self.config.get(CONF_BATTERY_STATUS_SENSOR)
